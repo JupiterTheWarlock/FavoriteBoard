@@ -1224,6 +1224,11 @@ class ToolboxApp {
         复制链接
       </button>
       <div class="context-menu-separator"></div>
+      <button class="context-menu-item" data-action="move-to-folder">
+        <span class="icon">📁</span>
+        移动到文件夹
+      </button>
+      <div class="context-menu-separator"></div>
       <button class="context-menu-item danger" data-action="delete">
         <span class="icon">🗑️</span>
         从收藏夹中删除
@@ -1239,7 +1244,7 @@ class ToolboxApp {
     const y = event.clientY;
     
     // 确保菜单不超出屏幕边界
-    const menuRect = { width: 160, height: 120 }; // 预估菜单大小
+    const menuRect = { width: 160, height: 160 }; // 预估菜单大小（增加了移动选项）
     const adjustedX = Math.min(x, window.innerWidth - menuRect.width - 10);
     const adjustedY = Math.min(y, window.innerHeight - menuRect.height - 10);
     
@@ -1270,6 +1275,9 @@ class ToolboxApp {
           break;
         case 'copy':
           this.copyToClipboard(link.url);
+          break;
+        case 'move-to-folder':
+          this.showMoveToFolderDialog(link);
           break;
         case 'delete':
           this.showDeleteConfirmation(link, card);
@@ -1330,6 +1338,231 @@ class ToolboxApp {
     }
   }
   
+  // 显示移动到文件夹对话框
+  showMoveToFolderDialog(link) {
+    console.log('📁 创建移动到文件夹对话框...');
+    
+    // 创建对话框覆盖层
+    const overlay = document.createElement('div');
+    overlay.className = 'move-folder-overlay';
+    
+    // 确保样式正确应用
+    overlay.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      margin: 0 !important;
+      padding: 20px;
+      box-sizing: border-box;
+    `;
+    
+    // 获取所有文件夹的列表
+    const allFolders = this.getAllFoldersFlat();
+    
+    // 构建文件夹选项HTML
+    const folderOptionsHtml = allFolders.map(folder => {
+      const isCurrentFolder = folder.id === link.parentId;
+      const indentStyle = `padding-left: ${folder.depth * 20 + 20}px;`;
+      
+      return `
+        <div class="folder-option ${isCurrentFolder ? 'current-folder' : ''}" 
+             data-folder-id="${folder.id}" 
+             style="${indentStyle}"
+             ${isCurrentFolder ? 'disabled' : ''}>
+          <span class="folder-icon">${folder.icon}</span>
+          <span class="folder-name">${folder.title}</span>
+          ${isCurrentFolder ? '<span class="current-indicator">(当前位置)</span>' : ''}
+        </div>
+      `;
+    }).join('');
+    
+    overlay.innerHTML = `
+      <div class="move-folder-dialog">
+        <h3 class="move-folder-title">移动到文件夹</h3>
+        <div class="move-folder-message">
+          选择要移动 <strong>"${link.title}"</strong> 到的文件夹：
+        </div>
+        <div class="folder-list-container">
+          <div class="folder-list">
+            ${folderOptionsHtml}
+          </div>
+        </div>
+        <div class="move-folder-actions">
+          <button class="move-folder-btn cancel">取消</button>
+          <button class="move-folder-btn confirm" disabled>移动</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    console.log('✅ 移动文件夹对话框已添加到页面');
+    
+    // 显示对话框
+    setTimeout(() => {
+      overlay.classList.add('show');
+      console.log('✅ 移动文件夹对话框显示动画开始');
+    }, 10);
+    
+    // 绑定事件
+    this.bindMoveToFolderEvents(overlay, link);
+  }
+  
+  // 获取所有文件夹的扁平列表
+  getAllFoldersFlat() {
+    const allFolders = [];
+    
+    // 递归遍历文件夹树
+    const traverseTree = (nodes, depth = 0) => {
+      nodes.forEach(node => {
+        allFolders.push({
+          id: node.id,
+          title: node.title,
+          icon: node.icon,
+          depth: depth
+        });
+        
+        if (node.children && node.children.length > 0) {
+          traverseTree(node.children, depth + 1);
+        }
+      });
+    };
+    
+    // 从文件夹树开始遍历，跳过"全部书签"这个虚拟节点
+    const realFolders = this.folderTree.filter(folder => !folder.isSpecial);
+    traverseTree(realFolders, 0);
+    
+    return allFolders;
+  }
+  
+  // 绑定移动到文件夹对话框的事件
+  bindMoveToFolderEvents(overlay, link) {
+    const confirmBtn = overlay.querySelector('.move-folder-btn.confirm');
+    const cancelBtn = overlay.querySelector('.move-folder-btn.cancel');
+    const folderOptions = overlay.querySelectorAll('.folder-option');
+    
+    let selectedFolderId = null;
+    
+    // 文件夹选择事件
+    folderOptions.forEach(option => {
+      if (!option.hasAttribute('disabled')) {
+        option.addEventListener('click', () => {
+          // 清除之前的选中状态
+          folderOptions.forEach(opt => opt.classList.remove('selected'));
+          
+          // 设置新的选中状态
+          option.classList.add('selected');
+          selectedFolderId = option.dataset.folderId;
+          
+          // 启用确认按钮
+          confirmBtn.disabled = false;
+        });
+      }
+    });
+    
+    // 取消按钮事件
+    cancelBtn.addEventListener('click', () => {
+      this.closeMoveToFolderDialog(overlay);
+    });
+    
+    // 确认按钮事件
+    confirmBtn.addEventListener('click', async () => {
+      if (selectedFolderId) {
+        try {
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = '移动中...';
+          
+          await this.moveBookmarkToFolder(link, selectedFolderId);
+          this.closeMoveToFolderDialog(overlay);
+          
+        } catch (error) {
+          console.error('❌ 移动收藏夹失败:', error);
+          this.showNotification('移动收藏夹失败 😿', 'error');
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = '移动';
+        }
+      }
+    });
+    
+    // 点击覆盖层关闭对话框
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        this.closeMoveToFolderDialog(overlay);
+      }
+    });
+    
+    // ESC键关闭对话框
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        this.closeMoveToFolderDialog(overlay);
+        document.removeEventListener('keydown', handleKeyDown);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+  }
+  
+  // 关闭移动到文件夹对话框
+  closeMoveToFolderDialog(overlay) {
+    overlay.classList.remove('show');
+    setTimeout(() => {
+      if (overlay && overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    }, 300);
+  }
+  
+  // 移动收藏夹到指定文件夹
+  async moveBookmarkToFolder(link, targetFolderId) {
+    try {
+      console.log(`📁 移动收藏夹 ${link.id} 到文件夹 ${targetFolderId}`);
+      
+      // 发送移动请求到后台脚本
+      let response = await this.sendMessageToBackground({
+        action: 'moveBookmark',
+        bookmarkId: link.id,
+        targetFolderId: targetFolderId
+      });
+      
+      console.log('📨 收到后台脚本响应:', response);
+      
+      // 如果后台脚本通信失败，尝试直接调用Chrome API
+      if (!response.success && response.error && (response.error.includes('message port closed') || response.error.includes('No response from background script'))) {
+        console.log('🔄 后台脚本通信失败，尝试直接调用Chrome API...');
+        try {
+          await chrome.bookmarks.move(link.id, { parentId: targetFolderId });
+          response = { success: true, directCall: true };
+          console.log('✅ 直接调用Chrome API成功');
+        } catch (directError) {
+          console.error('❌ 直接调用Chrome API也失败:', directError);
+          response = { success: false, error: `后台脚本和直接调用都失败: ${directError.message}` };
+        }
+      }
+      
+      if (response.success) {
+        console.log('✅ 收藏夹移动成功');
+        this.showNotification('收藏夹已移动，正在刷新页面... 🐱', 'success', 1200);
+        
+        // 等待通知显示后刷新整个网页
+        setTimeout(() => {
+          location.reload();
+        }, 1200);
+        
+      } else {
+        throw new Error(response.error || '移动失败');
+      }
+    } catch (error) {
+      console.error('❌ 移动收藏夹失败:', error);
+      throw error;
+    }
+  }
+
   // 显示删除确认对话框
   showDeleteConfirmation(link, card) {
     console.log('🔍 创建删除确认对话框...');
@@ -1376,36 +1609,6 @@ class ToolboxApp {
     setTimeout(() => {
       overlay.classList.add('show');
       console.log('✅ 对话框显示动画开始');
-      
-      // 备用居中方法：手动计算位置
-      const dialog = overlay.querySelector('.delete-confirm-dialog');
-      if (dialog) {
-        const rect = dialog.getBoundingClientRect();
-        console.log('📐 对话框尺寸和位置:', {
-          width: rect.width,
-          height: rect.height,
-          top: rect.top,
-          left: rect.left,
-          windowWidth: window.innerWidth,
-          windowHeight: window.innerHeight
-        });
-        
-        // 如果对话框不在屏幕中央，手动调整
-        const centerX = window.innerWidth / 2;
-        const centerY = window.innerHeight / 2;
-        
-        if (Math.abs(rect.left + rect.width / 2 - centerX) > 50 || 
-            Math.abs(rect.top + rect.height / 2 - centerY) > 50) {
-          console.log('⚠️ 对话框位置不正确，使用备用居中方法');
-          
-          // 使用绝对定位手动居中
-          dialog.style.position = 'absolute';
-          dialog.style.top = '50%';
-          dialog.style.left = '50%';
-          dialog.style.transform = 'translate(-50%, -50%) scale(1)';
-          dialog.style.margin = '0';
-        }
-      }
     }, 10);
     
     // 绑定按钮事件
@@ -1466,7 +1669,7 @@ class ToolboxApp {
       console.log('📨 收到后台脚本响应:', response);
       
       // 如果后台脚本通信失败，尝试直接调用Chrome API
-      if (!response.success && response.error && response.error.includes('message port closed')) {
+      if (!response.success && response.error && (response.error.includes('message port closed') || response.error.includes('No response from background script'))) {
         console.log('🔄 后台脚本通信失败，尝试直接调用Chrome API...');
         try {
           await chrome.bookmarks.remove(link.id);
@@ -1479,18 +1682,15 @@ class ToolboxApp {
       }
       
       if (response.success) {
-        // 删除成功，移除卡片
-        console.log('✅ 删除成功，移除卡片');
+        // 删除成功，显示通知并刷新页面
+        console.log('✅ 删除成功，准备刷新页面');
+        
+        this.showNotification(`"${link.title}" 已删除，正在刷新页面... 🐱`, 'success', 1200);
+        
+        // 等待通知显示后刷新整个网页
         setTimeout(() => {
-          if (card.parentNode) {
-            card.parentNode.removeChild(card);
-          }
-        }, 300);
-        
-        this.showNotification(`"${link.title}" 已从收藏夹中删除 🐱`, 'success');
-        
-        // 更新链接计数
-        this.updateLinkCount(this.getCurrentLinks().length - 1);
+          location.reload();
+        }, 1200);
       } else {
         // 删除失败，恢复卡片
         console.error('❌ 删除失败:', response.error);
@@ -1526,7 +1726,12 @@ class ToolboxApp {
           
           if (chrome.runtime.lastError) {
             console.warn('❌ Chrome runtime error:', chrome.runtime.lastError.message);
-            resolve({ success: false, error: chrome.runtime.lastError.message });
+            // 特别处理消息端口关闭的错误
+            if (chrome.runtime.lastError.message.includes('message port closed')) {
+              resolve({ success: false, error: 'The message port closed before a response was received.' });
+            } else {
+              resolve({ success: false, error: chrome.runtime.lastError.message });
+            }
           } else if (!response) {
             console.warn('❌ No response from background script');
             resolve({ success: false, error: 'No response from background script' });
@@ -1543,7 +1748,7 @@ class ToolboxApp {
   }
   
   // 显示通知
-  showNotification(message, type = 'info') {
+  showNotification(message, type = 'info', duration = 3000) {
     // 创建通知元素
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
@@ -1555,14 +1760,14 @@ class ToolboxApp {
     // 显示动画
     setTimeout(() => {
       notification.classList.add('slide-out');
-    }, 3000);
+    }, duration);
     
     // 移除通知
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
       }
-    }, 3500);
+    }, duration + 500);
   }
 
   // 测试扩展连接（调试用）
@@ -1722,6 +1927,46 @@ class ToolboxApp {
       }
     });
   }
+  
+  // 测试移动功能（调试用）
+  async testMoveFunction() {
+    console.log('🧪 测试移动功能...');
+    
+    // 检查是否有 Chrome Bookmarks API
+    if (typeof chrome === 'undefined' || !chrome.bookmarks) {
+      console.error('❌ Chrome Bookmarks API 不可用');
+      this.showNotification('Chrome Bookmarks API 不可用 😿', 'error');
+      return false;
+    }
+    
+    try {
+      // 测试获取书签树
+      const tree = await chrome.bookmarks.getTree();
+      console.log('✅ Chrome Bookmarks API 可用，树结构:', tree);
+      
+      // 检查是否有至少一个书签和文件夹
+      const flatBookmarks = this.bookmarkManager.cache?.flatBookmarks || [];
+      const folderTree = this.folderTree || [];
+      
+      if (flatBookmarks.length === 0) {
+        this.showNotification('没有找到收藏夹项目 😿', 'warning');
+        return false;
+      }
+      
+      if (folderTree.length <= 1) {
+        this.showNotification('需要至少两个文件夹才能测试移动功能 😿', 'warning');
+        return false;
+      }
+      
+      this.showNotification('移动功能测试通过！可以正常使用 🐱', 'success');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ 测试移动功能失败:', error);
+      this.showNotification('移动功能测试失败：' + error.message + ' 😿', 'error');
+      return false;
+    }
+  }
 }
 
 // 应用初始化
@@ -1731,5 +1976,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 将应用实例暴露到全局，方便调试
   window.linkBoardApp = app;
   console.log('🐱 LinkBoard应用已加载，可通过 window.linkBoardApp 访问');
-  console.log('💡 调试提示：使用 window.linkBoardApp.testExtensionConnection() 测试扩展连接');
+  console.log('💡 调试提示：');
+  console.log('   - 使用 window.linkBoardApp.testExtensionConnection() 测试扩展连接');
+  console.log('   - 使用 window.linkBoardApp.testMoveFunction() 测试移动功能');
 }); 

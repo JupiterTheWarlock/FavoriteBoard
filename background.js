@@ -337,6 +337,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleDeleteBookmark(message.bookmarkId, sendResponse);
       return true;
       
+    case 'moveBookmark':
+      handleMoveBookmark(message.bookmarkId, message.targetFolderId, sendResponse);
+      return true;
+      
     default:
       console.warn('⚠️ Unknown message action:', message.action);
   }
@@ -456,6 +460,39 @@ async function handleDeleteBookmark(bookmarkId, sendResponse) {
     // 刷新缓存将由事件监听器自动处理
   } catch (error) {
     console.error('❌ Error deleting bookmark:', error);
+    sendResponse({ 
+      success: false, 
+      error: error.message,
+      bookmarkId: bookmarkId
+    });
+  }
+}
+
+// 处理移动收藏夹
+async function handleMoveBookmark(bookmarkId, targetFolderId, sendResponse) {
+  try {
+    console.log('📁 Moving bookmark:', bookmarkId, 'to folder:', targetFolderId);
+    
+    if (!bookmarkId || !targetFolderId) {
+      throw new Error('Bookmark ID and target folder ID are required');
+    }
+    
+    // 先检查收藏夹是否存在
+    try {
+      await chrome.bookmarks.get(bookmarkId);
+    } catch (getError) {
+      throw new Error('Bookmark not found or already deleted');
+    }
+    
+    // 调用Chrome收藏夹API移动
+    await chrome.bookmarks.move(bookmarkId, { parentId: targetFolderId });
+    
+    console.log('✅ Bookmark moved successfully:', bookmarkId);
+    sendResponse({ success: true, bookmarkId: bookmarkId });
+    
+    // 刷新缓存将由事件监听器自动处理
+  } catch (error) {
+    console.error('❌ Error moving bookmark:', error);
     sendResponse({ 
       success: false, 
       error: error.message,
