@@ -1002,6 +1002,17 @@ class ToolboxApp {
       console.log(`🏷️ Tag筛选：${beforeTagFilter} -> ${categoryLinks.length}`);
     }
     
+    // 按照 dateAdded 时间倒序排序（最新的在前面）
+    if (categoryLinks && categoryLinks.length > 0) {
+      categoryLinks.sort((a, b) => {
+        // 处理可能缺失的 dateAdded 字段
+        const dateA = a.dateAdded ? parseInt(a.dateAdded) : 0;
+        const dateB = b.dateAdded ? parseInt(b.dateAdded) : 0;
+        return dateB - dateA; // 倒序：newer first
+      });
+      console.log('🔄 已按时间倒序排列链接');
+    }
+    
     console.log('🎯 最终返回的链接数量:', categoryLinks ? categoryLinks.length : 0);
     return categoryLinks;
   }
