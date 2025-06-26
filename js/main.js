@@ -111,13 +111,13 @@ class ToolboxApp {
   generateCategoriesFromBookmarks() {
     // 基础分类
     this.categories = [
-      {
-        id: 'dashboard',
-        name: 'Dashboard',
-        icon: '📊',
-        color: '#3498db',
-        description: '收藏夹概览统计'
-      },
+      // {
+      //   id: 'dashboard',
+      //   name: 'Dashboard',
+      //   icon: '📊',
+      //   color: '#3498db',
+      //   description: '收藏夹概览统计'
+      // },
       {
         id: 'all',
         name: '全部',
@@ -201,9 +201,11 @@ class ToolboxApp {
       let linkCount = 0;
       if (category.id === 'all') {
         linkCount = this.allLinks.length;
-      } else if (category.id === 'dashboard') {
-        linkCount = this.allLinks.length; // Dashboard显示总数
-      } else {
+      } 
+      // else if (category.id === 'dashboard') {
+      //   linkCount = this.allLinks.length; // Dashboard显示总数
+      // } 
+      else {
         linkCount = this.allLinks.filter(link => link.categoryId === category.id).length;
       }
       
@@ -238,7 +240,7 @@ class ToolboxApp {
       this.showLoadingState();
       
       // Dashboard状态下优先渲染统计信息，不等待任何异步操作
-      if (this.currentCategory === null || this.currentCategory === 'dashboard') {
+      if (this.currentCategory === null /*|| this.currentCategory === 'dashboard'*/) {
         console.log('📊 渲染Dashboard模式');
         this.clearLinksGrid();
         this.hideLoadingState();
@@ -321,12 +323,9 @@ class ToolboxApp {
       return;
     }
     
-    // 移除链接卡片和Dashboard统计
-    const existingCards = linksGrid.querySelectorAll('.link-card');
-    const existingStats = linksGrid.querySelector('.dashboard-stats');
-    
-    existingCards.forEach(card => card.remove());
-    if (existingStats) existingStats.remove();
+    // 直接清空所有内容，这样能确保移除所有子元素
+    // 包括链接卡片、Dashboard统计、空状态消息等所有内容
+    linksGrid.innerHTML = '';
     
     // Tag筛选器现在是独立的，不需要在这里清理
   }
@@ -409,7 +408,7 @@ class ToolboxApp {
     const categoryStats = {};
     
     this.categories.forEach(cat => {
-      if (cat.id !== 'all' && cat.id !== 'dashboard') {
+      if (cat.id !== 'all' /*&& cat.id !== 'dashboard'*/) {
         const count = this.allLinks.filter(link => link.categoryId === cat.id).length;
         if (count > 0) { // 只显示有链接的分类
           categoryStats[cat.id] = {
@@ -546,7 +545,7 @@ class ToolboxApp {
       </div>` : '';
     
     // 如果是dashboard页面、全部页面或全局搜索，显示分类信息
-    const categoryBadge = (this.currentCategory === 'dashboard' || this.currentCategory === 'all' || this.searchQuery) && link.categoryName ? 
+    const categoryBadge = (/*this.currentCategory === 'dashboard' ||*/ this.currentCategory === 'all' || this.searchQuery) && link.categoryName ? 
       `<div class="category-badge">
         <span class="category-badge-icon">${link.categoryIcon}</span>
         <span class="category-badge-name">${link.categoryName}</span>

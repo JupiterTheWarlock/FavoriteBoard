@@ -9,7 +9,7 @@ function applySiteConfig() {
     // 设置logo
     const logoElement = document.getElementById('siteLogo');
     if (logoElement) {
-        logoElement.textContent = '🐱 FavoriteBoard';
+        logoElement.textContent = 'FavoriteBoard';
     }
 }
 
