@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "FavoriteBoard Plugin",
+  "version": "1.0.0",
+  "description": "将收藏夹可视化为现代化链接卡片界面 - 基于 LinkBoard 设计",
+  "author": "JupiterTheWarlock",
+  
+  "permissions": [
+    "bookmarks",
+    "favicon",
+    "storage",
+    "tabs"
+  ],
+  
+  "host_permissions": [
+    "https://*/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "chrome_url_overrides": {
+    "newtab": "newtab/newtab.html"
+  },
+  
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "FavoriteBoard Plugin",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "32": "assets/icons/icon-32.png", 
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "32": "assets/icons/icon-32.png",
+    "48": "assets/icons/icon-48.png", 
+    "128": "assets/icons/icon-128.png"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "_favicon/*",
+        "assets/icons/*",
+        "assets/images/*",
+        "css/*",
+        "js/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 
