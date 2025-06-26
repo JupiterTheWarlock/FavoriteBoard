@@ -35,6 +35,12 @@
   box-sizing: border-box;
 }
 
+html {
+  -ms-text-size-adjust: 100%; /* 兼容IE/Edge */
+  -webkit-text-size-adjust: 100%; /* 兼容Safari/Chrome/Android */
+  text-size-adjust: 100%; /* 标准写法，现代浏览器 */
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--bg-color);
