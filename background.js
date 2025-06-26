@@ -333,6 +333,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       handleRefreshCache(sendResponse);
       return true;
       
+    case 'deleteBookmark':
+      handleDeleteBookmark(message.bookmarkId, sendResponse);
+      return true;
+      
     default:
       console.warn('⚠️ Unknown message action:', message.action);
   }
@@ -424,6 +428,39 @@ async function handleRefreshCache(sendResponse) {
   } catch (error) {
     console.error('❌ Error refreshing cache:', error);
     sendResponse({ success: false, error: error.message });
+  }
+}
+
+// 删除收藏夹
+async function handleDeleteBookmark(bookmarkId, sendResponse) {
+  try {
+    console.log('🗑️ Deleting bookmark:', bookmarkId);
+    
+    if (!bookmarkId) {
+      throw new Error('Bookmark ID is required');
+    }
+    
+    // 先检查收藏夹是否存在
+    try {
+      await chrome.bookmarks.get(bookmarkId);
+    } catch (getError) {
+      throw new Error('Bookmark not found or already deleted');
+    }
+    
+    // 调用Chrome收藏夹API删除
+    await chrome.bookmarks.remove(bookmarkId);
+    
+    console.log('✅ Bookmark deleted successfully:', bookmarkId);
+    sendResponse({ success: true, bookmarkId: bookmarkId });
+    
+    // 刷新缓存将由事件监听器自动处理
+  } catch (error) {
+    console.error('❌ Error deleting bookmark:', error);
+    sendResponse({ 
+      success: false, 
+      error: error.message,
+      bookmarkId: bookmarkId
+    });
   }
 }
 

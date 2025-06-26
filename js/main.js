@@ -9,7 +9,28 @@ class ToolboxApp {
     this.categories = []; // 动态生成的分类
     this.isLoading = true; // 加载状态
     
+    // 右键菜单相关状态
+    this.currentContextMenu = null;
+    this.currentBookmarkForContext = null;
+    
+    // 检查扩展环境
+    this.checkExtensionEnvironment();
+    
     this.init();
+  }
+
+  // 检查扩展环境
+  checkExtensionEnvironment() {
+    console.log('🔍 检查扩展环境...');
+    console.log('Chrome对象:', typeof chrome);
+    console.log('Chrome runtime:', chrome?.runtime ? '可用' : '不可用');
+    console.log('Chrome bookmarks:', chrome?.bookmarks ? '可用' : '不可用');
+    console.log('当前URL:', window.location.href);
+    console.log('扩展ID:', chrome?.runtime?.id);
+    
+    if (typeof chrome === 'undefined' || !chrome.runtime) {
+      console.warn('⚠️ 扩展环境不可用，某些功能可能无法正常工作');
+    }
   }
 
   async init() {
@@ -161,11 +182,12 @@ class ToolboxApp {
   generateAllLinks() {
     // 从收藏夹管理器获取所有收藏夹
     this.allLinks = this.bookmarkManager.getAllBookmarks().map(bookmark => ({
+      id: bookmark.id, // 添加ID字段用于删除操作
       title: bookmark.title,
       url: bookmark.url,
       description: bookmark.domain || '收藏夹链接',
       icon: null, // 将由getFavicon方法处理
-      tags: (bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
+      tags: bookmark.tags? bookmark.tags : [], //(bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
       categoryId: bookmark.parentId,
       categoryName: this.getCategoryName(bookmark.parentId),
       categoryIcon: this.getCategoryIcon(bookmark.parentId),
@@ -387,11 +409,27 @@ class ToolboxApp {
     // 遍历所有链接
     this.allLinks.forEach(link => {
       if (link.tags && Array.isArray(link.tags)) {
-        link.tags.forEach(tag => tagsSet.add(tag));
+        // 过滤掉域名标签（通常是第一个，或者以.com/.org等结尾的）
+        const filteredTags = link.tags.filter((tag, index) => {
+          // 跳过第一个标签（通常是域名）
+          if (index === 0) return false;
+          // 跳过明显的域名标签
+          return !this.isDomainTag(tag);
+        });
+        filteredTags.forEach(tag => tagsSet.add(tag));
       }
     });
     
     return Array.from(tagsSet).sort();
+  }
+
+  // 判断是否是域名标签
+  isDomainTag(tag) {
+    if (!tag || typeof tag !== 'string') return false;
+    
+    // 检查是否包含常见域名后缀
+    const domainSuffixes = ['.com', '.org', '.net', '.cn', '.io', '.me', '.co', '.gov', '.edu'];
+    return domainSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
   }
 
   // 渲染DashBoard统计信息
@@ -534,10 +572,25 @@ class ToolboxApp {
   createLinkCard(link) {
     const card = document.createElement('div');
     card.className = 'link-card';
-    card.addEventListener('click', () => window.open(link.url, '_blank'));
+    card.dataset.bookmarkId = link.id || '';
+    card.dataset.bookmarkUrl = link.url;
+    card.dataset.bookmarkTitle = link.title;
+    
+    // 左键点击打开链接
+    card.addEventListener('click', (e) => {
+      // 如果是右键点击，不执行打开链接
+      if (e.button === 2) return;
+      window.open(link.url, '_blank');
+    });
+    
+    // 右键菜单事件
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.showContextMenu(e, link, card);
+    });
     
     // 过滤掉域名标签（第一个标签通常是域名）
-    const filteredTags = link.tags ? link.tags.slice(1) : [];
+    const filteredTags = link.tags ? link.tags/*.slice(1)*/ : [];
     
     const tagsHTML = filteredTags.length > 0 ? 
       `<div class="card-tags">
@@ -842,6 +895,393 @@ class ToolboxApp {
     this.renderLinks();
   }
 
+  // 显示右键菜单
+  showContextMenu(event, link, card) {
+    // 隐藏已存在的菜单
+    this.hideContextMenu();
+    
+    // 设置当前上下文
+    this.currentBookmarkForContext = link;
+    
+    // 创建菜单
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.innerHTML = `
+      <button class="context-menu-item" data-action="open">
+        <span class="icon">🔗</span>
+        打开链接
+      </button>
+      <button class="context-menu-item" data-action="copy">
+        <span class="icon">📋</span>
+        复制链接
+      </button>
+      <div class="context-menu-separator"></div>
+      <button class="context-menu-item danger" data-action="delete">
+        <span class="icon">🗑️</span>
+        从收藏夹中删除
+      </button>
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(menu);
+    this.currentContextMenu = menu;
+    
+    // 设置位置
+    const x = event.clientX;
+    const y = event.clientY;
+    
+    // 确保菜单不超出屏幕边界
+    const menuRect = { width: 160, height: 120 }; // 预估菜单大小
+    const adjustedX = Math.min(x, window.innerWidth - menuRect.width - 10);
+    const adjustedY = Math.min(y, window.innerHeight - menuRect.height - 10);
+    
+    menu.style.left = adjustedX + 'px';
+    menu.style.top = adjustedY + 'px';
+    
+    // 添加卡片激活状态
+    card.classList.add('context-active');
+    
+    // 显示菜单
+    setTimeout(() => {
+      menu.classList.add('show');
+    }, 10);
+    
+    // 绑定菜单事件
+    this.bindContextMenuEvents(menu, link, card);
+  }
+  
+  // 绑定右键菜单事件
+  bindContextMenuEvents(menu, link, card) {
+    const handleMenuClick = (e) => {
+      e.stopPropagation();
+      const action = e.target.closest('.context-menu-item')?.dataset.action;
+      
+      switch (action) {
+        case 'open':
+          window.open(link.url, '_blank');
+          break;
+        case 'copy':
+          this.copyToClipboard(link.url);
+          break;
+        case 'delete':
+          this.showDeleteConfirmation(link, card);
+          break;
+      }
+      
+      this.hideContextMenu();
+    };
+    
+    menu.addEventListener('click', handleMenuClick);
+  }
+  
+  // 隐藏右键菜单
+  hideContextMenu() {
+    if (this.currentContextMenu) {
+      this.currentContextMenu.classList.remove('show');
+      setTimeout(() => {
+        if (this.currentContextMenu && this.currentContextMenu.parentNode) {
+          this.currentContextMenu.parentNode.removeChild(this.currentContextMenu);
+        }
+        this.currentContextMenu = null;
+      }, 150);
+    }
+    
+    // 移除所有卡片的激活状态
+    document.querySelectorAll('.link-card.context-active').forEach(card => {
+      card.classList.remove('context-active');
+    });
+    
+    this.currentBookmarkForContext = null;
+  }
+  
+  // 复制到剪贴板
+  async copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showNotification('链接已复制到剪贴板 🐱', 'success');
+    } catch (error) {
+      console.warn('❌ 复制失败，使用备用方法:', error);
+      
+      // 备用方法
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        this.showNotification('链接已复制到剪贴板 🐱', 'success');
+      } catch (err) {
+        this.showNotification('复制失败 😿', 'error');
+      }
+      
+      document.body.removeChild(textArea);
+    }
+  }
+  
+  // 显示删除确认对话框
+  showDeleteConfirmation(link, card) {
+    console.log('🔍 创建删除确认对话框...');
+    
+    // 创建确认对话框
+    const overlay = document.createElement('div');
+    overlay.className = 'delete-confirm-overlay';
+    
+    // 确保样式正确应用
+    overlay.style.cssText = `
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      background: rgba(0,0,0,0.5);
+      z-index: 10000;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      margin: 0 !important;
+      padding: 20px;
+      box-sizing: border-box;
+    `;
+    
+    overlay.innerHTML = `
+      <div class="delete-confirm-dialog">
+        <h3 class="delete-confirm-title">确认删除收藏</h3>
+        <div class="delete-confirm-message">
+          你确定要从收藏夹中删除 <strong>"${link.title}"</strong> 吗？<br>
+          此操作无法撤销。
+        </div>
+        <div class="delete-confirm-actions">
+          <button class="delete-confirm-btn cancel">取消</button>
+          <button class="delete-confirm-btn confirm">删除</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    console.log('✅ 对话框已添加到页面');
+    
+    // 显示对话框
+    setTimeout(() => {
+      overlay.classList.add('show');
+      console.log('✅ 对话框显示动画开始');
+      
+      // 备用居中方法：手动计算位置
+      const dialog = overlay.querySelector('.delete-confirm-dialog');
+      if (dialog) {
+        const rect = dialog.getBoundingClientRect();
+        console.log('📐 对话框尺寸和位置:', {
+          width: rect.width,
+          height: rect.height,
+          top: rect.top,
+          left: rect.left,
+          windowWidth: window.innerWidth,
+          windowHeight: window.innerHeight
+        });
+        
+        // 如果对话框不在屏幕中央，手动调整
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        
+        if (Math.abs(rect.left + rect.width / 2 - centerX) > 50 || 
+            Math.abs(rect.top + rect.height / 2 - centerY) > 50) {
+          console.log('⚠️ 对话框位置不正确，使用备用居中方法');
+          
+          // 使用绝对定位手动居中
+          dialog.style.position = 'absolute';
+          dialog.style.top = '50%';
+          dialog.style.left = '50%';
+          dialog.style.transform = 'translate(-50%, -50%) scale(1)';
+          dialog.style.margin = '0';
+        }
+      }
+    }, 10);
+    
+    // 绑定按钮事件
+    const cancelBtn = overlay.querySelector('.cancel');
+    const confirmBtn = overlay.querySelector('.confirm');
+    
+    const closeDialog = () => {
+      overlay.classList.remove('show');
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+      }, 300);
+    };
+    
+    cancelBtn.addEventListener('click', closeDialog);
+    confirmBtn.addEventListener('click', () => {
+      this.deleteBookmark(link, card);
+      closeDialog();
+    });
+    
+    // 点击背景关闭
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeDialog();
+      }
+    });
+  }
+  
+  // 删除收藏夹
+  async deleteBookmark(link, card) {
+    console.log('🔍 开始删除收藏夹流程:', {
+      linkId: link.id,
+      linkTitle: link.title,
+      linkUrl: link.url
+    });
+    
+    if (!link.id) {
+      console.error('❌ 缺少收藏夹ID');
+      this.showNotification('无法删除：缺少收藏夹ID 😿', 'error');
+      return;
+    }
+    
+    try {
+      // 先给卡片添加删除动画
+      card.style.transition = 'all 0.3s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'scale(0.8)';
+      
+      console.log('📡 发送删除请求到后台脚本...');
+      
+      // 调用后台API删除收藏夹
+      let response = await this.sendMessageToBackground({
+        action: 'deleteBookmark',
+        bookmarkId: link.id
+      });
+      
+      console.log('📨 收到后台脚本响应:', response);
+      
+      // 如果后台脚本通信失败，尝试直接调用Chrome API
+      if (!response.success && response.error && response.error.includes('message port closed')) {
+        console.log('🔄 后台脚本通信失败，尝试直接调用Chrome API...');
+        try {
+          await chrome.bookmarks.remove(link.id);
+          response = { success: true, directCall: true };
+          console.log('✅ 直接调用Chrome API成功');
+        } catch (directError) {
+          console.error('❌ 直接调用Chrome API也失败:', directError);
+          response = { success: false, error: `后台脚本和直接调用都失败: ${directError.message}` };
+        }
+      }
+      
+      if (response.success) {
+        // 删除成功，移除卡片
+        console.log('✅ 删除成功，移除卡片');
+        setTimeout(() => {
+          if (card.parentNode) {
+            card.parentNode.removeChild(card);
+          }
+        }, 300);
+        
+        this.showNotification(`"${link.title}" 已从收藏夹中删除 🐱`, 'success');
+        
+        // 更新链接计数
+        this.updateLinkCount(this.getCurrentLinks().length - 1);
+      } else {
+        // 删除失败，恢复卡片
+        console.error('❌ 删除失败:', response.error);
+        card.style.opacity = '1';
+        card.style.transform = 'scale(1)';
+        this.showNotification('删除失败：' + (response.error || '未知错误') + ' 😿', 'error');
+      }
+    } catch (error) {
+      console.error('❌ 删除收藏夹时出错:', error);
+      // 恢复卡片
+      card.style.opacity = '1';
+      card.style.transform = 'scale(1)';
+      this.showNotification('删除失败：' + error.message + ' 😿', 'error');
+    }
+  }
+  
+  // 发送消息到后台脚本
+  async sendMessageToBackground(message) {
+    return new Promise((resolve, reject) => {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+        resolve({ success: false, error: 'Chrome runtime not available' });
+        return;
+      }
+
+      // 设置超时机制
+      const timeout = setTimeout(() => {
+        resolve({ success: false, error: 'Request timeout' });
+      }, 10000); // 10秒超时
+
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          clearTimeout(timeout);
+          
+          if (chrome.runtime.lastError) {
+            console.warn('❌ Chrome runtime error:', chrome.runtime.lastError.message);
+            resolve({ success: false, error: chrome.runtime.lastError.message });
+          } else if (!response) {
+            console.warn('❌ No response from background script');
+            resolve({ success: false, error: 'No response from background script' });
+          } else {
+            resolve(response);
+          }
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        console.error('❌ Error sending message:', error);
+        resolve({ success: false, error: error.message });
+      }
+    });
+  }
+  
+  // 显示通知
+  showNotification(message, type = 'info') {
+    // 创建通知元素
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    // 添加到页面
+    document.body.appendChild(notification);
+    
+    // 显示动画
+    setTimeout(() => {
+      notification.classList.add('slide-out');
+    }, 3000);
+    
+    // 移除通知
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 3500);
+  }
+
+  // 测试扩展连接（调试用）
+  async testExtensionConnection() {
+    console.log('🔧 测试扩展连接...');
+    
+    try {
+      const response = await this.sendMessageToBackground({
+        action: 'getBookmarksCache'
+      });
+      
+      if (response.success) {
+        console.log('✅ 扩展连接正常');
+        this.showNotification('扩展连接测试成功 🐱', 'success');
+        return true;
+      } else {
+        console.error('❌ 扩展连接失败:', response.error);
+        this.showNotification('扩展连接测试失败：' + response.error + ' 😿', 'error');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ 测试连接时出错:', error);
+      this.showNotification('扩展连接测试出错：' + error.message + ' 😿', 'error');
+      return false;
+    }
+  }
+
   // 设置Tag横向滚动功能
   setupTagScrolling() {
     const tagScrollContainer = document.querySelector('.tag-scroll-container');
@@ -895,6 +1335,11 @@ class ToolboxApp {
   bindEvents() {
     // 分类切换和logo点击
     document.addEventListener('click', (e) => {
+      // 如果点击的不是右键菜单相关元素，隐藏右键菜单
+      if (!e.target.closest('.context-menu') && !e.target.closest('.link-card')) {
+        this.hideContextMenu();
+      }
+      
       if (e.target.closest('.category-btn')) {
         const categoryId = e.target.closest('.category-btn').dataset.category;
         this.setActiveCategory(categoryId);
@@ -960,5 +1405,10 @@ class ToolboxApp {
 
 // 应用初始化
 document.addEventListener('DOMContentLoaded', () => {
-  new ToolboxApp();
+  const app = new ToolboxApp();
+  
+  // 将应用实例暴露到全局，方便调试
+  window.linkBoardApp = app;
+  console.log('🐱 LinkBoard应用已加载，可通过 window.linkBoardApp 访问');
+  console.log('💡 调试提示：使用 window.linkBoardApp.testExtensionConnection() 测试扩展连接');
 }); 
