@@ -1558,18 +1558,73 @@ class ToolboxApp {
       
       if (response.success) {
         console.log('✅ 收藏夹移动成功');
-        this.showNotification('收藏夹已移动，正在刷新页面... 🐱', 'success', 1200);
+        this.showNotification('收藏夹已移动 🐱', 'success', 1200);
         
-        // 等待通知显示后刷新整个网页
-        setTimeout(() => {
-          location.reload();
-        }, 1200);
-        
+        // 如果当前分类是"全部"或者是dashboard，则不需要移除卡片
+        if (this.currentCategory === 'all' || this.currentCategory === null) {
+          // 更新卡片的分类信息
+          const card = document.querySelector(`.link-card[data-bookmark-id="${link.id}"]`);
+          if (card) {
+            // 获取目标文件夹信息
+            const targetFolder = await this.bookmarkManager.getFolder(targetFolderId);
+            if (targetFolder) {
+              // 更新卡片中的分类标签
+              const categoryBadge = card.querySelector('.category-badge');
+              if (categoryBadge) {
+                const folderIcon = this.getFolderIcon(targetFolder.title, 0);
+                categoryBadge.innerHTML = `
+                  <span class="category-badge-icon">${folderIcon}</span>
+                  <span class="category-badge-name">${targetFolder.title}</span>
+                `;
+              }
+              
+              // 更新内存中的链接数据
+              const linkIndex = this.allLinks.findIndex(item => item.id === link.id);
+              if (linkIndex !== -1) {
+                this.allLinks[linkIndex].categoryId = targetFolderId;
+                this.allLinks[linkIndex].categoryName = targetFolder.title;
+                this.allLinks[linkIndex].categoryIcon = folderIcon;
+              }
+            }
+          }
+        } else {
+          // 如果是在特定文件夹视图，则移除卡片
+          const card = document.querySelector(`.link-card[data-bookmark-id="${link.id}"]`);
+          if (card) {
+            // 添加移除动画
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.8)';
+            
+            // 从DOM中移除卡片
+            setTimeout(() => {
+              if (card && card.parentNode) {
+                card.parentNode.removeChild(card);
+              }
+              
+              // 更新链接计数
+              const currentCount = document.querySelectorAll('.link-card').length;
+              this.updateLinkCount(currentCount);
+              
+              // 如果当前没有链接了，显示空状态
+              if (currentCount === 0) {
+                const emptyState = document.getElementById('emptyState');
+                if (emptyState) {
+                  emptyState.classList.remove('hidden');
+                }
+              }
+            }, 300);
+          }
+          
+          // 更新内存中的数据
+          this.allLinks = this.allLinks.filter(item => item.id !== link.id);
+        }
       } else {
         throw new Error(response.error || '移动失败');
       }
     } catch (error) {
       console.error('❌ 移动收藏夹失败:', error);
+      this.showNotification(`移动失败: ${error.message} 😿`, 'error');
       throw error;
     }
   }
@@ -1693,28 +1748,45 @@ class ToolboxApp {
       }
       
       if (response.success) {
-        // 删除成功，显示通知并刷新页面
-        console.log('✅ 删除成功，准备刷新页面');
+        // 删除成功，显示通知并动态更新UI
+        console.log('✅ 删除成功，更新UI');
         
-        this.showNotification(`"${link.title}" 已删除，正在刷新页面... 🐱`, 'success', 1200);
+        this.showNotification(`"${link.title}" 已删除 🐱`, 'success', 1200);
         
-        // 等待通知显示后刷新整个网页
+        // 从DOM中移除卡片
         setTimeout(() => {
-          location.reload();
-        }, 1200);
+          if (card && card.parentNode) {
+            card.parentNode.removeChild(card);
+          }
+          
+          // 更新本地数据
+          if (this.allLinks && this.allLinks.length > 0) {
+            this.allLinks = this.allLinks.filter(item => item.id !== link.id);
+          }
+          
+          // 更新链接计数
+          const currentCount = document.querySelectorAll('.link-card').length;
+          this.updateLinkCount(currentCount);
+          
+          // 如果当前没有链接了，显示空状态
+          if (currentCount === 0) {
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+              emptyState.classList.remove('hidden');
+            }
+          }
+        }, 300);
       } else {
-        // 删除失败，恢复卡片
-        console.error('❌ 删除失败:', response.error);
-        card.style.opacity = '1';
-        card.style.transform = 'scale(1)';
-        this.showNotification('删除失败：' + (response.error || '未知错误') + ' 😿', 'error');
+        throw new Error(response.error || '删除失败');
       }
     } catch (error) {
-      console.error('❌ 删除收藏夹时出错:', error);
-      // 恢复卡片
+      console.error('❌ 删除收藏夹失败:', error);
+      
+      // 删除失败，恢复卡片显示
       card.style.opacity = '1';
       card.style.transform = 'scale(1)';
-      this.showNotification('删除失败：' + error.message + ' 😿', 'error');
+      
+      this.showNotification(`删除失败: ${error.message} 😿`, 'error');
     }
   }
   

@@ -407,6 +407,34 @@ class BookmarkManager {
       lastSync: this.lastSync
     };
   }
+  
+  // 获取指定ID的文件夹信息
+  async getFolder(folderId) {
+    if (!folderId || !this.cache || !this.cache.folderMap) {
+      return null;
+    }
+    
+    // 从缓存中获取文件夹信息
+    if (this.cache.folderMap[folderId]) {
+      return this.cache.folderMap[folderId];
+    }
+    
+    // 如果缓存中没有，尝试通过Chrome API获取
+    try {
+      const [folder] = await chrome.bookmarks.get(folderId);
+      if (folder) {
+        return {
+          id: folder.id,
+          title: folder.title,
+          parentId: folder.parentId
+        };
+      }
+    } catch (error) {
+      console.warn('❌ Error getting folder:', error);
+    }
+    
+    return null;
+  }
 }
 
 // 导出为全局变量以供其他脚本使用
