@@ -3,6 +3,29 @@
 
 console.log('🐱 FavoriteBoard Plugin background script loaded');
 
+// 监听插件图标点击事件
+chrome.action.onClicked.addListener(async (tab) => {
+  console.log('🐱 插件图标被点击，打开收藏夹面板...');
+  
+  try {
+    // 检查是否已经有收藏夹标签页打开
+    const tabs = await chrome.tabs.query({url: chrome.runtime.getURL('index.html')});
+    
+    if (tabs.length > 0) {
+      // 如果已经有收藏夹标签页，则激活它
+      await chrome.tabs.update(tabs[0].id, {active: true});
+      await chrome.windows.update(tabs[0].windowId, {focused: true});
+    } else {
+      // 否则创建新的收藏夹标签页
+      await chrome.tabs.create({
+        url: chrome.runtime.getURL('index.html')
+      });
+    }
+  } catch (error) {
+    console.error('❌ 打开收藏夹面板失败:', error);
+  }
+});
+
 // 扩展安装或更新时的处理
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('📦 Extension installed/updated:', details.reason);
@@ -38,9 +61,6 @@ async function initializeExtension() {
     await initializeBookmarksCache();
     
     console.log('✅ Extension initialized successfully');
-    
-    // 打开新标签页展示欢迎界面
-    chrome.tabs.create({ url: 'chrome://newtab/' });
     
   } catch (error) {
     console.error('❌ Error initializing extension:', error);
@@ -336,11 +356,11 @@ async function handleGetBookmarksCache(sendResponse) {
 // 获取网站图标
 async function handleGetFavicon(url, sendResponse) {
   try {
-    const domain = extractDomain(url);
+    const domain = new URL(url).hostname;
     const cacheKey = `favicon_${domain}`;
     
-    // 先检查缓存
-    const cached = await chrome.storage.local.get(cacheKey);
+    // 检查缓存
+    const cached = await chrome.storage.local.get([cacheKey]);
     if (cached[cacheKey]) {
       sendResponse({ success: true, favicon: cached[cacheKey] });
       return;
@@ -349,29 +369,50 @@ async function handleGetFavicon(url, sendResponse) {
     // 首先尝试使用扩展内部的 favicon API
     const extensionFaviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
     
-    // 测试扩展 favicon 是否可用
     try {
+      // 测试扩展 favicon 是否可用
       const response = await fetch(extensionFaviconUrl);
       if (response.ok) {
-        // 缓存结果
         await chrome.storage.local.set({ [cacheKey]: extensionFaviconUrl });
         sendResponse({ success: true, favicon: extensionFaviconUrl });
         return;
       }
-    } catch (error) {
+    } catch (e) {
       console.warn('⚠️ Extension favicon not available, falling back to Google service');
     }
     
     // 后备方案：使用 Google favicon 服务
     const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
     
-    // 缓存结果
-    await chrome.storage.local.set({ [cacheKey]: googleFaviconUrl });
-    
-    sendResponse({ success: true, favicon: googleFaviconUrl });
+    try {
+      await chrome.storage.local.set({ [cacheKey]: googleFaviconUrl });
+      
+      sendResponse({ success: true, favicon: googleFaviconUrl });
+    } catch (error) {
+      console.error('❌ Error getting favicon:', error);
+      sendResponse({ 
+        success: false, 
+        error: error.message,
+        fallback: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+          <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="4" fill="#94a3b8"/>
+            <text x="16" y="20" text-anchor="middle" fill="white" font-size="16">🔗</text>
+          </svg>
+        `)
+      });
+    }
   } catch (error) {
-    console.error('❌ Error getting favicon:', error);
-    sendResponse({ success: false, error: error.message });
+    console.error('❌ Error in handleGetFavicon:', error);
+    sendResponse({ 
+      success: false, 
+      error: error.message,
+      fallback: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
+        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="4" fill="#94a3b8"/>
+          <text x="16" y="20" text-anchor="middle" fill="white" font-size="16">🔗</text>
+        </svg>
+      `)
+    });
   }
 }
 

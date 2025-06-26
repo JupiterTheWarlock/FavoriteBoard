@@ -222,6 +222,53 @@ class BookmarkManager {
     return Array.from(tagsSet).sort();
   }
   
+  // 生成标签（基于URL域名）
+  generateTags(url) {
+    try {
+      const domain = new URL(url).hostname;
+      const parts = domain.split('.');
+      
+      // 生成标签数组，但剔除主域名（通常是第一个有意义的部分）
+      const tags = [];
+      
+      // 如果域名有多个部分，提取有意义的部分作为标签
+      if (parts.length >= 2) {
+        // 跳过主域名，只取子域名或其他有意义的部分
+        const mainDomain = parts.slice(-2).join('.'); // 获取主域名，如 "baidu.com"
+        
+        // 添加子域名作为标签（如果有的话）
+        if (parts.length > 2) {
+          const subdomains = parts.slice(0, -2);
+          tags.push(...subdomains.filter(part => part !== 'www' && part.length > 1));
+        }
+        
+        // 可以根据特定域名添加分类标签
+        const categoryMap = {
+          'github.com': ['开发', '代码托管'],
+          'stackoverflow.com': ['开发', '问答'],
+          'bilibili.com': ['视频', '娱乐'],
+          'youtube.com': ['视频', '娱乐'],
+          'zhihu.com': ['知识', '问答'],
+          'baidu.com': ['搜索'],
+          'google.com': ['搜索'],
+          'weibo.com': ['社交'],
+          'twitter.com': ['社交'],
+          'facebook.com': ['社交'],
+        };
+        
+        if (categoryMap[mainDomain]) {
+          tags.push(...categoryMap[mainDomain]);
+        }
+      }
+      
+      // 过滤掉空字符串和重复项
+      return [...new Set(tags.filter(tag => tag && tag.length > 0))];
+    } catch (error) {
+      console.warn('❌ Error generating tags for URL:', url, error);
+      return [];
+    }
+  }
+  
   // 获取网站图标
   async getFavicon(url) {
     try {
@@ -234,7 +281,8 @@ class BookmarkManager {
         return response.favicon;
       } else {
         console.warn('⚠️ Failed to get favicon for:', url);
-        return this.getDefaultFavicon();
+        // 如果有fallback，使用fallback，否则使用默认图标
+        return response.fallback || this.getDefaultFavicon();
       }
     } catch (error) {
       console.warn('⚠️ Error getting favicon:', error);

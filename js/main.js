@@ -5,50 +5,207 @@ class ToolboxApp {
     this.filteredLinks = [];
     this.allLinks = [];
     this.selectedTags = new Set(); // 添加选中的Tag集合
+    this.bookmarkManager = new BookmarkManager(); // 添加收藏夹管理器
+    this.categories = []; // 动态生成的分类
+    this.isLoading = true; // 加载状态
     
     this.init();
   }
 
-  init() {
-    this.generateAllLinks();
-    this.renderCategories();
-    this.renderLinks();
-    this.bindEvents();
-    // 初始状态不选中任何分类，显示Dashboard
-    this.updateCategoryInfo();
+  async init() {
+    try {
+      console.log('🐱 正在初始化收藏夹面板...');
+      
+      // 显示加载状态
+      this.showLoadingState();
+      
+      // 等待收藏夹数据加载
+      await this.loadBookmarksData();
+      
+      // 生成分类和链接数据
+      this.generateCategoriesFromBookmarks();
+      this.generateAllLinks();
+      
+      // 渲染界面
+      this.renderCategories();
+      this.renderLinks();
+      this.bindEvents();
+      
+      // 初始状态不选中任何分类，显示Dashboard
+      this.updateCategoryInfo();
+      
+      // 监听收藏夹更新
+      this.setupBookmarkListeners();
+      
+      // 隐藏加载状态
+      this.hideLoadingState();
+      
+      console.log('✅ 收藏夹面板初始化完成');
+      
+    } catch (error) {
+      console.error('❌ 初始化失败:', error);
+      this.showErrorState(error);
+    }
+  }
+  
+  // 显示加载状态
+  showLoadingState() {
+    const linksGrid = document.getElementById('linksGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    hideElement(linksGrid);
+    showElement(emptyState);
+    emptyState.innerHTML = `
+      <div class="loading-state">
+        <div class="loading-icon">🐱</div>
+        <div class="loading-text">正在加载收藏夹数据...</div>
+      </div>
+    `;
+  }
+  
+  // 隐藏加载状态
+  hideLoadingState() {
+    this.isLoading = false;
+    const linksGrid = document.getElementById('linksGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    hideElement(emptyState);
+    showElement(linksGrid, 'grid'); // 显示链接网格
+  }
+  
+  // 显示错误状态
+  showErrorState(error) {
+    const linksGrid = document.getElementById('linksGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    hideElement(linksGrid);
+    showElement(emptyState);
+    emptyState.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">😿</div>
+        <div class="error-text">加载收藏夹数据失败</div>
+        <div class="error-detail">${error.message}</div>
+        <button class="retry-btn" id="retryBtn">重试</button>
+      </div>
+    `;
+    
+    // 添加重试按钮事件监听器
+    const retryBtn = document.getElementById('retryBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => location.reload());
+    }
+  }
+  
+  // 加载收藏夹数据
+  async loadBookmarksData() {
+    try {
+      await this.bookmarkManager.loadBookmarks();
+      console.log('📚 收藏夹数据加载成功');
+    } catch (error) {
+      console.error('❌ 收藏夹数据加载失败:', error);
+      throw error;
+    }
+  }
+  
+  // 从收藏夹数据生成分类
+  generateCategoriesFromBookmarks() {
+    // 基础分类
+    this.categories = [
+      {
+        id: 'dashboard',
+        name: 'Dashboard',
+        icon: '📊',
+        color: '#3498db',
+        description: '收藏夹概览统计'
+      },
+      {
+        id: 'all',
+        name: '全部',
+        icon: '🗂️',
+        color: '#95a5a6',
+        description: '所有收藏夹'
+      }
+    ];
+    
+    // 从收藏夹文件夹生成分类
+    const folderTree = this.bookmarkManager.getFolderTree();
+    folderTree.forEach((folder, index) => {
+      const colors = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e'];
+      const icons = ['📁', '🔖', '⭐', '📌', '🎯', '📝'];
+      
+      this.categories.push({
+        id: folder.id,
+        name: folder.title,
+        icon: icons[index % icons.length],
+        color: colors[index % colors.length],
+        description: `${folder.bookmarkCount} 个收藏夹`,
+        isFolder: true
+      });
+    });
+    
+    console.log('📂 生成了', this.categories.length, '个分类');
+  }
+  
+  // 设置收藏夹事件监听
+  setupBookmarkListeners() {
+    this.bookmarkManager.on('bookmarks-updated', () => {
+      console.log('🔄 收藏夹已更新，重新渲染...');
+      this.generateCategoriesFromBookmarks();
+      this.generateAllLinks();
+      this.renderCategories();
+      this.renderLinks();
+    });
   }
 
   // 生成所有链接数组
   generateAllLinks() {
-    this.allLinks = [];
-    Object.keys(links).forEach(categoryId => {
-      if (categoryId !== 'dashboard' && categoryId !== 'all') {
-        const categoryData = categories.find(cat => cat.id === categoryId);
-        links[categoryId].forEach(link => {
-          this.allLinks.push({
-            ...link,
-            categoryId: categoryId,
-            categoryName: categoryData ? categoryData.name : categoryId,
-            categoryIcon: categoryData ? categoryData.icon : '📂'
-          });
-        });
-      }
-    });
+    // 从收藏夹管理器获取所有收藏夹
+    this.allLinks = this.bookmarkManager.getAllBookmarks().map(bookmark => ({
+      title: bookmark.title,
+      url: bookmark.url,
+      description: bookmark.domain || '收藏夹链接',
+      icon: null, // 将由getFavicon方法处理
+      tags: bookmark.tags || [],
+      categoryId: bookmark.parentId,
+      categoryName: this.getCategoryName(bookmark.parentId),
+      categoryIcon: this.getCategoryIcon(bookmark.parentId),
+      dateAdded: bookmark.dateAdded,
+      domain: bookmark.domain
+    }));
     
-    // 将所有链接赋值给'all'分类，dashboard保持空数组
-    links['all'] = this.allLinks;
-    links['dashboard'] = [];
+    console.log('🔗 生成了', this.allLinks.length, '个链接');
+  }
+  
+  // 获取分类名称
+  getCategoryName(categoryId) {
+    const category = this.categories.find(cat => cat.id === categoryId);
+    return category ? category.name : '未分类';
+  }
+  
+  // 获取分类图标
+  getCategoryIcon(categoryId) {
+    const category = this.categories.find(cat => cat.id === categoryId);
+    return category ? category.icon : '📂';
   }
 
   // 渲染分类列表
   renderCategories() {
     const categoryList = document.getElementById('categoryList');
+    categoryList.innerHTML = ''; // 清空现有内容
     
-    categories.forEach(category => {
+    this.categories.forEach(category => {
       const li = document.createElement('li');
       li.className = 'category-item';
       
-      const linkCount = links[category.id] ? links[category.id].length : 0;
+      // 计算链接数量
+      let linkCount = 0;
+      if (category.id === 'all') {
+        linkCount = this.allLinks.length;
+      } else if (category.id === 'dashboard') {
+        linkCount = this.allLinks.length; // Dashboard显示总数
+      } else {
+        linkCount = this.allLinks.filter(link => link.categoryId === category.id).length;
+      }
       
       li.innerHTML = `
         <button class="category-btn" data-category="${category.id}">
@@ -64,46 +221,105 @@ class ToolboxApp {
   }
 
   // 渲染链接
-  renderLinks() {
-    const currentLinks = this.getCurrentLinks();
-    const linksGrid = document.getElementById('linksGrid');
-    const emptyState = document.getElementById('emptyState');
+  async renderLinks() {
+    const linksGrid = document.querySelector('.links-grid');
     
-    // 先清理所有现有内容
-    this.clearLinksGrid();
-    
-    // 如果没有选中分类（currentCategory为null），显示Dashboard
-    if (this.currentCategory === null) {
-      this.renderDashboardStats();
-      // Dashboard不显示链接卡片，直接返回
-      this.updateLinkCount(this.allLinks.length); // 显示总链接数
-      return;
-    }
-    
-    // 渲染Tag筛选器（所有分类页面都显示，包括"全部"页面）
-    this.renderTagFilters();
-    
-    if (currentLinks.length === 0) {
-      linksGrid.style.display = 'none';
-      emptyState.style.display = 'block';
-      return;
-    }
-    
-    linksGrid.style.display = 'grid';
-    emptyState.style.display = 'none';
-    
-    // 渲染链接卡片
-    currentLinks.forEach(link => {
-      const card = this.createLinkCard(link);
-      linksGrid.appendChild(card);
+    // 添加调试信息
+    console.log('🔍 renderLinks 调试信息:', {
+      currentCategory: this.currentCategory,
+      allLinksLength: this.allLinks ? this.allLinks.length : 0,
+      searchQuery: this.searchQuery,
+      selectedTags: Array.from(this.selectedTags || []),
+      linksGridElement: !!linksGrid
     });
     
-    this.updateLinkCount(currentLinks.length);
+    try {
+      // 首先显示加载状态
+      this.showLoadingState();
+      
+      // Dashboard状态下优先渲染统计信息，不等待任何异步操作
+      if (this.currentCategory === null || this.currentCategory === 'dashboard') {
+        console.log('📊 渲染Dashboard模式');
+        this.clearLinksGrid();
+        this.hideLoadingState();
+        
+        // 立即渲染Dashboard统计，不等待任何异步操作
+        this.renderDashboardStats();
+        return;
+      }
+      
+      // 获取当前分类的链接
+      const links = this.getCurrentLinks();
+      console.log('📝 获取到的链接数量:', links ? links.length : 0);
+      
+      // 清空当前内容
+      this.clearLinksGrid();
+      
+      // 检查是否有链接
+      if (!links || links.length === 0) {
+        console.log('❌ 没有链接可显示');
+        this.hideLoadingState();
+        
+        const emptyMessage = this.searchQuery 
+          ? '没有找到匹配的链接 🔍' 
+          : '该分类暂无链接 📝';
+          
+        linksGrid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <h3>${emptyMessage}</h3>
+            <p>尝试搜索其他关键词或查看其他分类</p>
+          </div>
+        `;
+        
+        // 确保链接网格容器可见
+        showElement(linksGrid, 'grid');
+        
+        this.updateLinkCount(0);
+        return;
+      }
+      
+      console.log('✅ 开始渲染链接卡片...');
+      
+      // 立即渲染所有链接卡片（使用默认图标）
+      const fragment = document.createDocumentFragment();
+      links.forEach((link, index) => {
+        const card = this.createLinkCard(link);
+        // 为卡片添加渐进式动画延迟
+        card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`;
+        fragment.appendChild(card);
+      });
+      
+      linksGrid.appendChild(fragment);
+      
+      // 立即隐藏加载状态，显示内容
+      this.hideLoadingState();
+      
+      // 更新链接数量
+      this.updateLinkCount(links.length);
+      
+      // 更新分类信息
+      this.updateCategoryInfo();
+      
+      // 渲染标签筛选器（如果需要）
+      this.renderTagFilters();
+      
+      console.log(`✅ 已渲染 ${links.length} 个链接卡片`);
+      
+    } catch (error) {
+      console.error('❌ 渲染链接时出错:', error);
+      this.showErrorState(error);
+    }
   }
 
   // 清理链接网格内容
   clearLinksGrid() {
-    const linksGrid = document.getElementById('linksGrid');
+    const linksGrid = document.querySelector('.links-grid');
+    
+    if (!linksGrid) {
+      console.warn('⚠️ 找不到 .links-grid 元素');
+      return;
+    }
     
     // 移除链接卡片和Dashboard统计
     const existingCards = linksGrid.querySelectorAll('.link-card');
@@ -126,15 +342,15 @@ class ToolboxApp {
     
     if (currentTags.length === 0) {
       // 没有Tag时隐藏筛选区域
-      filterSection.style.display = 'none';
+      hideElement(filterSection);
       return;
     }
     
     // 显示筛选区域
-    filterSection.style.display = 'block';
+    showElement(filterSection);
     
     // 更新清除按钮显示状态
-    clearTagsBtn.style.display = this.selectedTags.size === 0 ? 'none' : 'inline-block';
+    toggleElement(clearTagsBtn, this.selectedTags.size > 0, 'inline-block');
     
     // 渲染Tag按钮
     tagList.innerHTML = currentTags.map(tag => `
@@ -152,13 +368,8 @@ class ToolboxApp {
       return this.getAllCategoriesTags();
     }
     
-    // 使用TagManager的方法来获取当前分类的Tag
-    if (typeof tagManager !== 'undefined') {
-      return tagManager.getTagsByCategory(this.currentCategory);
-    }
-    
-    // 备用方法（如果tagManager不可用）
-    const categoryLinks = links[this.currentCategory] || [];
+    // 获取当前分类的链接
+    const categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
     const tagsSet = new Set();
     
     categoryLinks.forEach(link => {
@@ -174,15 +385,10 @@ class ToolboxApp {
   getAllCategoriesTags() {
     const tagsSet = new Set();
     
-    // 遍历所有分类（除了dashboard和all）
-    Object.keys(links).forEach(categoryId => {
-      if (categoryId !== 'dashboard' && categoryId !== 'all') {
-        const categoryLinks = links[categoryId] || [];
-        categoryLinks.forEach(link => {
-          if (link.tags && Array.isArray(link.tags)) {
-            link.tags.forEach(tag => tagsSet.add(tag));
-          }
-        });
+    // 遍历所有链接
+    this.allLinks.forEach(link => {
+      if (link.tags && Array.isArray(link.tags)) {
+        link.tags.forEach(tag => tagsSet.add(tag));
       }
     });
     
@@ -191,39 +397,58 @@ class ToolboxApp {
 
   // 渲染DashBoard统计信息
   renderDashboardStats() {
-    const linksGrid = document.getElementById('linksGrid');
+    const linksGrid = document.querySelector('.links-grid');
+    
+    if (!linksGrid) {
+      console.warn('⚠️ 找不到 .links-grid 元素');
+      return;
+    }
     
     // 计算统计数据
     const totalLinks = this.allLinks.length;
     const categoryStats = {};
     
-    categories.forEach(cat => {
-      if (cat.id !== 'all') {
-        categoryStats[cat.id] = {
-          name: cat.name,
-          icon: cat.icon,
-          color: cat.color,
-          count: links[cat.id] ? links[cat.id].length : 0
-        };
+    this.categories.forEach(cat => {
+      if (cat.id !== 'all' && cat.id !== 'dashboard') {
+        const count = this.allLinks.filter(link => link.categoryId === cat.id).length;
+        if (count > 0) { // 只显示有链接的分类
+          categoryStats[cat.id] = {
+            name: cat.name,
+            icon: cat.icon,
+            color: cat.color,
+            count: count
+          };
+        }
       }
     });
+    
+    // 获取收藏夹统计信息
+    const bookmarkStats = this.bookmarkManager.getStats();
     
     // 创建统计卡片
     const statsCard = document.createElement('div');
     statsCard.className = 'dashboard-stats';
     statsCard.innerHTML = `
       <div class="stats-header">
-        <h3>📊 网站统计</h3>
-        <p>链接收藏总览</p>
+        <h3>📊 收藏夹统计</h3>
+        <p>您的收藏夹概览</p>
       </div>
       <div class="stats-grid">
         <div class="stat-item total">
           <span class="stat-number">${totalLinks}</span>
-          <span class="stat-label">总链接数</span>
+          <span class="stat-label">总收藏夹</span>
         </div>
         <div class="stat-item categories">
           <span class="stat-number">${Object.keys(categoryStats).length}</span>
-          <span class="stat-label">分类数量</span>
+          <span class="stat-label">文件夹数量</span>
+        </div>
+        <div class="stat-item tags">
+          <span class="stat-number">${bookmarkStats.totalTags || 0}</span>
+          <span class="stat-label">标签数量</span>
+        </div>
+        <div class="stat-item domains">
+          <span class="stat-number">${bookmarkStats.totalDomains || 0}</span>
+          <span class="stat-label">不同域名</span>
         </div>
       </div>
       <div class="category-stats">
@@ -238,6 +463,9 @@ class ToolboxApp {
     `;
     
     linksGrid.appendChild(statsCard);
+    
+    // 确保链接网格容器可见
+    showElement(linksGrid, 'grid');
   }
 
   // 获取默认图标
@@ -307,11 +535,14 @@ class ToolboxApp {
   createLinkCard(link) {
     const card = document.createElement('div');
     card.className = 'link-card';
-    card.onclick = () => window.open(link.url, '_blank');
+    card.addEventListener('click', () => window.open(link.url, '_blank'));
     
-    const tagsHTML = link.tags ? 
+    // 过滤掉域名标签（第一个标签通常是域名）
+    const filteredTags = link.tags ? link.tags.slice(1) : [];
+    
+    const tagsHTML = filteredTags.length > 0 ? 
       `<div class="card-tags">
-        ${link.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+        ${filteredTags.map(tag => `<span class="tag">${tag}</span>`).join('')}
       </div>` : '';
     
     // 如果是dashboard页面、全部页面或全局搜索，显示分类信息
@@ -321,13 +552,12 @@ class ToolboxApp {
         <span class="category-badge-name">${link.categoryName}</span>
       </div>` : '';
     
-    // 处理图标，如果为空或无效则使用默认图标
-    const iconSrc = this.getSafeIcon(link.icon, link.url);
+    // 先使用默认图标，然后异步加载真实图标
+    const defaultIcon = this.getDefaultIcon();
     
     card.innerHTML = `
       <div class="card-header">
-        <img class="card-icon" src="${iconSrc}" alt="${link.title}" 
-             onerror="this.src='${this.getDefaultIcon()}'">
+        <img class="card-icon" src="${defaultIcon}" alt="${link.title}" data-loading="true">
         <h3 class="card-title">${link.title}</h3>
       </div>
       ${categoryBadge}
@@ -335,13 +565,94 @@ class ToolboxApp {
       ${tagsHTML}
     `;
     
+    // 异步加载真实图标，不阻塞页面渲染
+    const iconImg = card.querySelector('.card-icon');
+    this.loadIconAsync(iconImg, link.icon, link.url);
+    
     return card;
+  }
+
+  // 异步加载图标
+  async loadIconAsync(imgElement, iconUrl, websiteUrl) {
+    try {
+      // 如果有自定义图标，先尝试加载
+      if (iconUrl && this.isValidIconUrl(iconUrl)) {
+        await this.tryLoadIcon(imgElement, iconUrl);
+        return;
+      }
+      
+      // 否则尝试获取网站的favicon
+      if (websiteUrl) {
+        const faviconUrl = await this.getFaviconAsync(websiteUrl);
+        if (faviconUrl) {
+          await this.tryLoadIcon(imgElement, faviconUrl);
+          return;
+        }
+      }
+      
+      // 如果都失败了，保持默认图标
+      imgElement.removeAttribute('data-loading');
+    } catch (error) {
+      console.warn('⚠️ Failed to load icon for:', websiteUrl, error);
+      imgElement.removeAttribute('data-loading');
+    }
+  }
+
+  // 尝试加载图标
+  async tryLoadIcon(imgElement, iconUrl) {
+    return new Promise((resolve, reject) => {
+      const testImg = new Image();
+      
+      testImg.onload = () => {
+        imgElement.src = iconUrl;
+        imgElement.removeAttribute('data-loading');
+        resolve();
+      };
+      
+      testImg.onerror = () => {
+        reject(new Error('Failed to load icon'));
+      };
+      
+      // 设置超时，避免长时间等待
+      setTimeout(() => {
+        reject(new Error('Icon load timeout'));
+      }, 5000);
+      
+      testImg.src = iconUrl;
+    });
+  }
+
+  // 异步获取favicon
+  async getFaviconAsync(url) {
+    try {
+      if (this.bookmarkManager && typeof this.bookmarkManager.getFavicon === 'function') {
+        return await this.bookmarkManager.getFavicon(url);
+      }
+      
+      // 如果没有bookmarkManager，使用简单的域名favicon
+      if (typeof getFaviconUrl === 'function') {
+        return getFaviconUrl(url);
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('⚠️ Error getting favicon:', error);
+      return null;
+    }
   }
 
   // 获取当前分类的链接
   getCurrentLinks() {
+    console.log('🔍 getCurrentLinks 调试信息:', {
+      currentCategory: this.currentCategory,
+      allLinksLength: this.allLinks ? this.allLinks.length : 0,
+      searchQuery: this.searchQuery,
+      selectedTagsSize: this.selectedTags ? this.selectedTags.size : 0
+    });
+    
     // Dashboard状态下不返回链接
     if (this.currentCategory === null) {
+      console.log('🏠 Dashboard状态，返回空数组');
       return [];
     }
     
@@ -361,7 +672,9 @@ class ToolboxApp {
         );
       } else {
         // 在其他分类中，只搜索当前分类的链接
-        const currentCategoryLinks = links[this.currentCategory] || [];
+        const currentCategoryLinks = this.allLinks.filter(link => 
+          link.categoryId === this.currentCategory
+        );
         categoryLinks = currentCategoryLinks.filter(link =>
           link.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
           link.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -372,11 +685,18 @@ class ToolboxApp {
       }
     } else {
       // 否则返回当前分类的链接
-      categoryLinks = links[this.currentCategory] || [];
+      if (this.currentCategory === 'all') {
+        categoryLinks = this.allLinks;
+      } else {
+        categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
+      }
     }
+    
+    console.log('📝 分类筛选后的链接数量:', categoryLinks ? categoryLinks.length : 0);
     
     // Tag筛选
     if (this.selectedTags.size > 0) {
+      const beforeTagFilter = categoryLinks.length;
       categoryLinks = categoryLinks.filter(link => {
         if (!link.tags || !Array.isArray(link.tags)) return false;
         
@@ -385,8 +705,10 @@ class ToolboxApp {
           link.tags.includes(selectedTag)
         );
       });
+      console.log(`🏷️ Tag筛选：${beforeTagFilter} -> ${categoryLinks.length}`);
     }
     
+    console.log('🎯 最终返回的链接数量:', categoryLinks ? categoryLinks.length : 0);
     return categoryLinks;
   }
 
@@ -397,28 +719,23 @@ class ToolboxApp {
     const searchBar = document.getElementById('searchBar');
     
     if (this.currentCategory === null) {
-      // Dashboard状态 - 使用siteConfig配置
-      if (typeof siteConfig !== 'undefined' && siteConfig.dashboard) {
-        if (categoryTitle) categoryTitle.textContent = siteConfig.dashboard.title || 'Dashboard';
-        if (categoryDesc) categoryDesc.textContent = siteConfig.dashboard.subtitle || '数据统计和网站概览';
-      } else {
-        if (categoryTitle) categoryTitle.textContent = 'Dashboard';
-        if (categoryDesc) categoryDesc.textContent = '数据统计和网站概览';
-      }
+      // Dashboard状态
+      if (categoryTitle) categoryTitle.textContent = 'Dashboard';
+      if (categoryDesc) categoryDesc.textContent = '数据统计和网站概览';
       // Dashboard状态下隐藏搜索栏
       if (searchBar) {
-        searchBar.style.display = 'none';
+        hideElement(searchBar);
       }
     } else {
       // 具体分类状态
-      const category = categories.find(cat => cat.id === this.currentCategory);
+      const category = this.categories.find(cat => cat.id === this.currentCategory);
       if (category) {
         if (categoryTitle) categoryTitle.textContent = category.name;
         if (categoryDesc) categoryDesc.textContent = category.description;
       }
       // 分类页面显示搜索栏
       if (searchBar) {
-        searchBar.style.display = 'block';
+        showElement(searchBar);
       }
     }
   }
@@ -438,7 +755,7 @@ class ToolboxApp {
     
     // 显示/隐藏清除按钮
     const clearBtn = document.getElementById('clearSearch');
-    clearBtn.style.display = this.searchQuery ? 'block' : 'none';
+    toggleElement(clearBtn, this.searchQuery ? true : false);
   }
 
   // 清除搜索
@@ -495,7 +812,7 @@ class ToolboxApp {
     // 隐藏Tag筛选区域（只有Dashboard才隐藏）
     const filterSection = document.getElementById('tagFilterSection');
     if (this.currentCategory === null) {
-      filterSection.style.display = 'none';
+      hideElement(filterSection);
     }
     
     // 更新分类信息
@@ -517,7 +834,7 @@ class ToolboxApp {
     
     // 隐藏Tag筛选区域
     const filterSection = document.getElementById('tagFilterSection');
-    filterSection.style.display = 'none';
+    hideElement(filterSection);
     
     // 更新分类信息
     this.updateCategoryInfo();

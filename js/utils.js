@@ -1,5 +1,37 @@
 // 工具函数集合
 
+// 显示/隐藏元素的工具函数（符合CSP要求）
+function hideElement(element) {
+    if (element) {
+        element.classList.add('hidden');
+        element.classList.remove('show', 'show-inline-block', 'show-grid');
+    }
+}
+
+function showElement(element, displayType = 'block') {
+    if (element) {
+        element.classList.remove('hidden');
+        if (displayType === 'inline-block') {
+            element.classList.add('show-inline-block');
+            element.classList.remove('show', 'show-grid');
+        } else if (displayType === 'grid') {
+            element.classList.add('show-grid');
+            element.classList.remove('show', 'show-inline-block');
+        } else {
+            element.classList.add('show');
+            element.classList.remove('show-inline-block', 'show-grid');
+        }
+    }
+}
+
+function toggleElement(element, show, displayType = 'block') {
+    if (show) {
+        showElement(element, displayType);
+    } else {
+        hideElement(element);
+    }
+}
+
 // 防抖函数
 function debounce(func, wait, immediate) {
   let timeout;
@@ -128,24 +160,10 @@ function showNotification(message, type = 'info', duration = 3000) {
   notification.className = `notification notification-${type}`;
   notification.textContent = message;
   
-  // 简单的通知样式
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 12px 20px;
-    background: ${type === 'success' ? '#2ecc71' : type === 'error' ? '#e74c3c' : '#3498db'};
-    color: white;
-    border-radius: 4px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    z-index: 1000;
-    animation: slideIn 0.3s ease;
-  `;
-  
   document.body.appendChild(notification);
   
   setTimeout(() => {
-    notification.style.animation = 'slideOut 0.3s ease';
+    notification.classList.add('slide-out');
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
