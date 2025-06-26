@@ -43,12 +43,12 @@ class ToolboxApp {
       // 等待收藏夹数据加载
       await this.loadBookmarksData();
       
-      // 生成分类和链接数据
-      this.generateCategoriesFromBookmarks();
+      // 生成文件夹树和链接数据
+      this.generateFolderTreeFromBookmarks();
       this.generateAllLinks();
       
       // 渲染界面
-      this.renderCategories();
+      this.renderFolderTree();
       this.renderLinks();
       this.bindEvents();
       
@@ -128,52 +128,102 @@ class ToolboxApp {
     }
   }
   
-  // 从收藏夹数据生成分类
-  generateCategoriesFromBookmarks() {
-    // 基础分类
-    this.categories = [
-      // {
-      //   id: 'dashboard',
-      //   name: 'Dashboard',
-      //   icon: '📊',
-      //   color: '#3498db',
-      //   description: '收藏夹概览统计'
-      // },
-      {
-        id: 'all',
-        name: '全部',
-        icon: '🗂️',
-        color: '#95a5a6',
-        description: '所有收藏夹'
-      }
-    ];
+  // 从收藏夹数据生成文件夹树
+  generateFolderTreeFromBookmarks() {
+    // 获取原始收藏夹树结构
+    const rawTree = this.bookmarkManager.cache?.tree || [];
+    this.folderTree = [];
     
-    // 从收藏夹文件夹生成分类
-    const folderTree = this.bookmarkManager.getFolderTree();
-    folderTree.forEach((folder, index) => {
-      const colors = ['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#34495e'];
-      const icons = ['📁', '🔖', '⭐', '📌', '🎯', '📝'];
-      
-      this.categories.push({
-        id: folder.id,
-        name: folder.title,
-        icon: icons[index % icons.length],
-        color: colors[index % colors.length],
-        description: `${folder.bookmarkCount} 个收藏夹`,
-        isFolder: true
-      });
+    // 处理根节点，通常包含 "书签栏"、"其他书签" 等
+    rawTree.forEach(rootNode => {
+      if (rootNode.children) {
+        // 添加一个"全部"节点
+        if (this.folderTree.length === 0) {
+          this.folderTree.push({
+            id: 'all',
+            title: '全部书签',
+            icon: '🗂️',
+            bookmarkCount: this.bookmarkManager.cache?.totalBookmarks || 0,
+            isSpecial: true,
+            isExpanded: true,
+            children: []
+          });
+        }
+        
+        // 处理每个根节点的子节点
+        rootNode.children.forEach(child => {
+          if (child.children !== undefined) { // 这是一个文件夹
+            const processedFolder = this.processFolderNode(child, 0);
+            if (processedFolder) {
+              this.folderTree.push(processedFolder);
+            }
+          }
+        });
+      }
     });
     
-    console.log('📂 生成了', this.categories.length, '个分类');
+    console.log('🌳 生成了文件夹树，根节点数量:', this.folderTree.length);
+  }
+  
+  // 处理文件夹节点
+  processFolderNode(node, depth) {
+    const folderInfo = this.bookmarkManager.cache?.folderMap[node.id] || {};
+    
+    const folderNode = {
+      id: node.id,
+      title: node.title,
+      parentId: node.parentId,
+      icon: this.getFolderIcon(node.title, depth),
+      bookmarkCount: folderInfo.bookmarkCount || 0,
+      depth: depth,
+      isExpanded: depth < 2, // 前两层默认展开
+      children: []
+    };
+    
+    // 递归处理子文件夹
+    if (node.children) {
+      node.children.forEach(child => {
+        if (child.children !== undefined) { // 这是一个文件夹
+          const childFolder = this.processFolderNode(child, depth + 1);
+          if (childFolder) {
+            folderNode.children.push(childFolder);
+          }
+        }
+      });
+    }
+    
+    return folderNode;
+  }
+  
+  // 获取文件夹图标
+  getFolderIcon(folderTitle, depth) {
+    const title = folderTitle.toLowerCase();
+    
+    // 根据文件夹名称返回相应图标
+    if (title.includes('工作') || title.includes('work')) return '💼';
+    if (title.includes('学习') || title.includes('study')) return '📚';
+    if (title.includes('娱乐') || title.includes('entertainment')) return '🎮';
+    if (title.includes('开发') || title.includes('dev')) return '💻';
+    if (title.includes('新闻') || title.includes('news')) return '📰';
+    if (title.includes('购物') || title.includes('shop')) return '🛒';
+    if (title.includes('社交') || title.includes('social')) return '👥';
+    if (title.includes('工具') || title.includes('tool')) return '🔧';
+    if (title.includes('设计') || title.includes('design')) return '🎨';
+    if (title.includes('音乐') || title.includes('music')) return '🎵';
+    if (title.includes('视频') || title.includes('video')) return '📹';
+    
+    // 根据深度返回默认图标
+    const depthIcons = ['📂', '📁', '🗂️', '📄'];
+    return depthIcons[Math.min(depth, depthIcons.length - 1)];
   }
   
   // 设置收藏夹事件监听
   setupBookmarkListeners() {
     this.bookmarkManager.on('bookmarks-updated', () => {
       console.log('🔄 收藏夹已更新，重新渲染...');
-      this.generateCategoriesFromBookmarks();
+      this.generateFolderTreeFromBookmarks();
       this.generateAllLinks();
-      this.renderCategories();
+      this.renderFolderTree();
       this.renderLinks();
     });
   }
@@ -210,38 +260,134 @@ class ToolboxApp {
     return category ? category.icon : '📂';
   }
 
-  // 渲染分类列表
-  renderCategories() {
-    const categoryList = document.getElementById('categoryList');
-    categoryList.innerHTML = ''; // 清空现有内容
+  // 渲染文件夹树
+  renderFolderTree() {
+    const folderTreeContainer = document.getElementById('folderTree');
+    if (!folderTreeContainer) {
+      console.error('❌ 找不到文件夹树容器元素');
+      return;
+    }
     
-    this.categories.forEach(category => {
-      const li = document.createElement('li');
-      li.className = 'category-item';
+    folderTreeContainer.innerHTML = ''; // 清空现有内容
+    
+    if (!this.folderTree || this.folderTree.length === 0) {
+      folderTreeContainer.innerHTML = '<div class="empty-tree">没有找到收藏夹</div>';
+      return;
+    }
+    
+    // 渲染文件夹树节点
+    this.folderTree.forEach(node => {
+      const nodeElement = this.createTreeNode(node);
+      folderTreeContainer.appendChild(nodeElement);
+    });
+    
+    console.log('🌳 文件夹树渲染完成');
+  }
+  
+  // 创建树节点元素
+  createTreeNode(node, depth = 0) {
+    const nodeContainer = document.createElement('div');
+    nodeContainer.className = 'tree-node';
+    
+    // 创建节点项
+    const nodeItem = document.createElement('div');
+    nodeItem.className = `tree-item ${node.isSpecial ? 'root-folder' : ''} ${node.bookmarkCount === 0 ? 'empty-folder' : ''}`;
+    nodeItem.setAttribute('data-depth', depth);
+    nodeItem.setAttribute('data-folder-id', node.id);
+    
+    // 展开/折叠箭头
+    const hasChildren = node.children && node.children.length > 0;
+    const expandIcon = hasChildren ? '▶' : '';
+    const expandClass = hasChildren ? (node.isExpanded ? 'expanded' : '') : 'leaf';
+    
+    nodeItem.innerHTML = `
+      <span class="tree-expand ${expandClass}" data-folder-id="${node.id}">
+        ${expandIcon}
+      </span>
+      <span class="tree-icon">${node.icon}</span>
+      <span class="tree-name">${node.title}</span>
+      <span class="tree-count">${node.bookmarkCount}</span>
+    `;
+    
+    nodeContainer.appendChild(nodeItem);
+    
+    // 创建子节点容器
+    if (hasChildren) {
+      const childrenContainer = document.createElement('div');
+      childrenContainer.className = `tree-children ${node.isExpanded ? 'expanded' : 'collapsed'}`;
       
-      // 计算链接数量
-      let linkCount = 0;
-      if (category.id === 'all') {
-        linkCount = this.allLinks.length;
-      } 
-      // else if (category.id === 'dashboard') {
-      //   linkCount = this.allLinks.length; // Dashboard显示总数
-      // } 
-      else {
-        linkCount = this.allLinks.filter(link => link.categoryId === category.id).length;
+      node.children.forEach(child => {
+        const childNode = this.createTreeNode(child, depth + 1);
+        childrenContainer.appendChild(childNode);
+      });
+      
+      nodeContainer.appendChild(childrenContainer);
+    }
+    
+    return nodeContainer;
+  }
+  
+  // 切换文件夹展开/折叠状态
+  toggleFolder(folderId) {
+    const folder = this.findFolderInTree(folderId);
+    if (!folder) return;
+    
+    folder.isExpanded = !folder.isExpanded;
+    
+    // 更新UI
+    const expandBtn = document.querySelector(`[data-folder-id="${folderId}"].tree-expand`);
+    const childrenContainer = expandBtn?.closest('.tree-node')?.querySelector('.tree-children');
+    
+    if (expandBtn && childrenContainer) {
+      if (folder.isExpanded) {
+        expandBtn.classList.add('expanded');
+        childrenContainer.classList.remove('collapsed');
+        childrenContainer.classList.add('expanded');
+      } else {
+        expandBtn.classList.remove('expanded');
+        childrenContainer.classList.remove('expanded');
+        childrenContainer.classList.add('collapsed');
+      }
+    }
+  }
+  
+  // 在树中查找文件夹
+  findFolderInTree(folderId, tree = null) {
+    const searchTree = tree || this.folderTree;
+    
+    for (const node of searchTree) {
+      if (node.id === folderId) {
+        return node;
       }
       
-      li.innerHTML = `
-        <button class="category-btn" data-category="${category.id}">
-          <span class="category-color-indicator" style="background-color: ${category.color}"></span>
-          <span class="category-icon">${category.icon}</span>
-          <span class="category-name">${category.name}</span>
-          <span class="category-count">${linkCount}</span>
-        </button>
-      `;
-      
-      categoryList.appendChild(li);
-    });
+      if (node.children && node.children.length > 0) {
+        const found = this.findFolderInTree(folderId, node.children);
+        if (found) return found;
+      }
+    }
+    
+    return null;
+  }
+  
+  // 获取文件夹及其所有子文件夹的ID列表
+  getFolderAndSubfolderIds(folderId) {
+    const folder = this.findFolderInTree(folderId);
+    if (!folder) return [folderId]; // 如果找不到文件夹，返回原ID（兼容性）
+    
+    const ids = [folderId];
+    
+    // 递归收集子文件夹IDs
+    function collectChildIds(node) {
+      if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+          ids.push(child.id);
+          collectChildIds(child);
+        });
+      }
+    }
+    
+    collectChildIds(folder);
+    return ids;
   }
 
   // 渲染链接
@@ -723,9 +869,10 @@ class ToolboxApp {
           ))
         );
       } else {
-        // 在其他分类中，只搜索当前分类的链接
+        // 在其他分类/文件夹中，只搜索当前分类/文件夹的链接
+        const folderIds = this.getFolderAndSubfolderIds(this.currentCategory);
         const currentCategoryLinks = this.allLinks.filter(link => 
-          link.categoryId === this.currentCategory
+          folderIds.includes(link.categoryId)
         );
         categoryLinks = currentCategoryLinks.filter(link =>
           link.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -740,7 +887,14 @@ class ToolboxApp {
       if (this.currentCategory === 'all') {
         categoryLinks = this.allLinks;
       } else {
-        categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
+        // 检查是否是文件夹，如果是则需要包含子文件夹的书签
+        const folderIds = this.getFolderAndSubfolderIds(this.currentCategory);
+        if (folderIds.length > 0) {
+          categoryLinks = this.allLinks.filter(link => folderIds.includes(link.categoryId));
+        } else {
+          // 兼容旧版分类
+          categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
+        }
       }
     }
     
@@ -779,13 +933,32 @@ class ToolboxApp {
         hideElement(searchBar);
       }
     } else {
-      // 具体分类状态
-      const category = this.categories.find(cat => cat.id === this.currentCategory);
-      if (category) {
-        if (categoryTitle) categoryTitle.textContent = category.name;
-        if (categoryDesc) categoryDesc.textContent = category.description;
+      // 检查是否是文件夹
+      const folder = this.findFolderInTree(this.currentCategory);
+      if (folder) {
+        // 文件夹状态
+        if (categoryTitle) categoryTitle.textContent = folder.title;
+        if (categoryDesc) {
+          let desc = `${folder.bookmarkCount} 个收藏链接`;
+          if (folder.children && folder.children.length > 0) {
+            desc += ` • ${folder.children.length} 个子文件夹`;
+          }
+          categoryDesc.textContent = desc;
+        }
+      } else {
+        // 旧版分类状态（兼容性）
+        const category = this.categories?.find(cat => cat.id === this.currentCategory);
+        if (category) {
+          if (categoryTitle) categoryTitle.textContent = category.name;
+          if (categoryDesc) categoryDesc.textContent = category.description;
+        } else {
+          // 如果找不到分类和文件夹，显示默认信息
+          if (categoryTitle) categoryTitle.textContent = '未知分类';
+          if (categoryDesc) categoryDesc.textContent = '当前分类信息不可用';
+        }
       }
-      // 分类页面显示搜索栏
+      
+      // 分类/文件夹页面显示搜索栏
       if (searchBar) {
         showElement(searchBar);
       }
@@ -874,6 +1047,48 @@ class ToolboxApp {
     this.renderLinks();
   }
 
+  // 设置活跃文件夹
+  setActiveFolder(folderId) {
+    console.log('🗂️ 切换到文件夹:', folderId);
+    
+    // 清除当前Tag筛选
+    this.selectedTags.clear();
+    
+    // 如果点击的是当前已选中的文件夹，则取消选择回到Dashboard
+    if (this.currentCategory === folderId) {
+      this.currentCategory = null;
+      // 取消所有文件夹的active状态
+      document.querySelectorAll('.tree-item').forEach(item => {
+        item.classList.remove('active');
+      });
+    } else {
+      // 选择新的文件夹
+      this.currentCategory = folderId;
+      
+      // 更新文件夹树的活跃状态
+      document.querySelectorAll('.tree-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      
+      const activeItem = document.querySelector(`[data-folder-id="${folderId}"]`);
+      if (activeItem) {
+        activeItem.classList.add('active');
+      }
+    }
+    
+    // 隐藏Tag筛选区域（只有Dashboard才隐藏）
+    const filterSection = document.getElementById('tagFilterSection');
+    if (this.currentCategory === null) {
+      hideElement(filterSection);
+    }
+    
+    // 更新分类信息
+    this.updateCategoryInfo();
+    
+    // 重新渲染链接
+    this.renderLinks();
+  }
+
   // 回到Dashboard（取消所有分类选择）
   goToDashboard() {
     this.selectedTags.clear();
@@ -882,6 +1097,11 @@ class ToolboxApp {
     // 取消所有按钮的active状态
     document.querySelectorAll('.category-btn').forEach(btn => {
       btn.classList.remove('active');
+    });
+    
+    // 取消所有文件夹的active状态
+    document.querySelectorAll('.tree-item').forEach(item => {
+      item.classList.remove('active');
     });
     
     // 隐藏Tag筛选区域
@@ -1333,13 +1553,26 @@ class ToolboxApp {
 
   // 绑定事件
   bindEvents() {
-    // 分类切换和logo点击
+    // 文件夹树和其他点击事件
     document.addEventListener('click', (e) => {
       // 如果点击的不是右键菜单相关元素，隐藏右键菜单
       if (!e.target.closest('.context-menu') && !e.target.closest('.link-card')) {
         this.hideContextMenu();
       }
       
+      // 文件夹展开/折叠
+      if (e.target.closest('.tree-expand')) {
+        e.stopPropagation(); // 防止触发文件夹选择
+        const folderId = e.target.closest('.tree-expand').dataset.folderId;
+        this.toggleFolder(folderId);
+      }
+      // 文件夹选择
+      else if (e.target.closest('.tree-item')) {
+        const folderId = e.target.closest('.tree-item').dataset.folderId;
+        this.setActiveFolder(folderId);
+      }
+      
+      // 旧的分类按钮（兼容性）
       if (e.target.closest('.category-btn')) {
         const categoryId = e.target.closest('.category-btn').dataset.category;
         this.setActiveCategory(categoryId);

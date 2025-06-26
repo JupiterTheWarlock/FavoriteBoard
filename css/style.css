@@ -187,6 +187,187 @@ body {
   box-shadow: 0 0 8px rgba(255,255,255,0.4);
 }
 
+/* 文件夹树样式 */
+.folder-tree {
+  margin-top: 1rem;
+}
+
+.tree-node {
+  margin-bottom: 0.25rem;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.5rem 0.75rem;
+  margin-left: var(--tree-indent, 0);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-color);
+  position: relative;
+  user-select: none;
+}
+
+.tree-item:hover {
+  background-color: var(--bg-color);
+  transform: translateX(2px);
+}
+
+.tree-item.active {
+  background-color: var(--primary-color);
+  color: var(--white);
+}
+
+.tree-item.active:hover {
+  background-color: #2980b9;
+}
+
+/* 树形缩进 */
+.tree-item[data-depth="0"] { --tree-indent: 0; }
+.tree-item[data-depth="1"] { --tree-indent: 1.2rem; }
+.tree-item[data-depth="2"] { --tree-indent: 2.4rem; }
+.tree-item[data-depth="3"] { --tree-indent: 3.6rem; }
+.tree-item[data-depth="4"] { --tree-indent: 4.8rem; }
+.tree-item[data-depth="5"] { --tree-indent: 6rem; }
+
+/* 展开/折叠箭头 */
+.tree-expand {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.tree-expand:hover {
+  background-color: rgba(0,0,0,0.1);
+}
+
+.tree-item.active .tree-expand:hover {
+  background-color: rgba(255,255,255,0.2);
+}
+
+.tree-expand.expanded {
+  transform: rotate(90deg);
+}
+
+.tree-expand.leaf {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 文件夹图标 */
+.tree-icon {
+  font-size: 1rem;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* 文件夹名称 */
+.tree-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* 文件夹书签计数 */
+.tree-count {
+  background: rgba(0,0,0,0.1);
+  color: inherit;
+  padding: 0.2rem 0.4rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.tree-item.active .tree-count {
+  background: rgba(255,255,255,0.2);
+}
+
+/* 连接线 */
+.tree-item::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--tree-indent, 0) + 10px);
+  top: 0;
+  bottom: 50%;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.3;
+}
+
+.tree-item[data-depth="0"]::before {
+  display: none;
+}
+
+.tree-item.last-child::before {
+  bottom: 50%;
+}
+
+/* 水平连接线 */
+.tree-item::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--tree-indent, 0) + 10px);
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background-color: var(--border-color);
+  opacity: 0.3;
+}
+
+.tree-item[data-depth="0"]::after {
+  display: none;
+}
+
+/* 子节点容器 */
+.tree-children {
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.tree-children.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.tree-children.expanded {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+/* 特殊节点样式 */
+.tree-item.root-folder {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.tree-item.empty-folder {
+  opacity: 0.6;
+}
+
+.tree-item.empty-folder .tree-name {
+  font-style: italic;
+}
+
+/* 空文件夹树提示 */
+.empty-tree {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+  font-style: italic;
+}
+
 /* 主内容区样式 */
 .main-content {
   flex: 1;
