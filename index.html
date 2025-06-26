@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkBoard - 链接管理面板</title>
+    <meta name="description" content="现代化的收集与管理链接的静态网页框架">
+    <meta name="keywords" content="linkboard, 链接管理, 书签, 导航, 收藏夹">
+    <meta name="author" content="">
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="./assets/icons/favicon.svg">
+    <link rel="icon" type="image/png" href="./assets/icons/favicon.png">
+    <link rel="apple-touch-icon" href="./assets/icons/favicon.png">
+    <link rel="stylesheet" href="css/reset.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <div class="app">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <nav class="category-nav">
+                <div class="logo" id="siteLogo">LinkBoard</div>
+                <ul class="category-list" id="categoryList">
+                    <!-- 动态生成分类按钮 -->
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 搜索栏 -->
+            <div class="search-bar" id="searchBar">
+                <input type="text" id="searchInput" placeholder="搜索链接..." autocomplete="off">
+                <button id="clearSearch" class="clear-btn" style="display: none;">×</button>
+            </div>
+
+            <!-- 当前分类信息 -->
+            <div class="category-info" id="categoryInfo">
+                <h2 class="category-title" id="categoryTitle">Dashboard</h2>
+                <p class="category-desc" id="categoryDesc">数据统计和网站概览</p>
+                <div class="link-count">共 <span id="linkCount">0</span> 个链接</div>
+            </div>
+
+            <!-- 标签筛选区域 -->
+            <div class="tag-filter-section" id="tagFilterSection" style="display: none;">
+                <div class="filter-header">
+                    <h4 class="filter-title">🏷️ 标签筛选</h4>
+                    <button class="clear-tags-btn" id="clearTagsBtn" style="display: none;">
+                        清除筛选
+                    </button>
+                </div>
+                <div class="tag-scroll-container">
+                    <div class="tag-list" id="tagList">
+                        <!-- 动态生成标签按钮 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 链接网格 -->
+            <div class="links-grid" id="linksGrid">
+                <!-- 动态生成链接卡片 -->
+            </div>
+
+            <!-- 空状态 -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <div class="empty-icon">🔍</div>
+                <div class="empty-text">没有找到相关链接</div>
+            </div>
+        </main>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="js/tag-manager.js"></script>
+    <script src="js/utils.js"></script>
+    <script>
+        // 应用网站配置
+        function applySiteConfig() {
+            if (typeof siteConfig !== 'undefined') {
+                // 设置页面标题
+                document.title = siteConfig.pageTitle || siteConfig.title || 'LinkBoard';
+                
+                // 设置meta信息
+                const descMeta = document.querySelector('meta[name="description"]');
+                if (descMeta && siteConfig.description) {
+                    descMeta.setAttribute('content', siteConfig.description);
+                }
+                
+                const keywordsMeta = document.querySelector('meta[name="keywords"]');
+                if (keywordsMeta && siteConfig.meta && siteConfig.meta.keywords) {
+                    keywordsMeta.setAttribute('content', siteConfig.meta.keywords);
+                }
+                
+                const authorMeta = document.querySelector('meta[name="author"]');
+                if (authorMeta && siteConfig.meta && siteConfig.meta.author) {
+                    authorMeta.setAttribute('content', siteConfig.meta.author);
+                }
+                
+                // 设置logo
+                const logoElement = document.getElementById('siteLogo');
+                if (logoElement && siteConfig.logo) {
+                    let logoContent = '';
+                    if (siteConfig.logo.showIcon && siteConfig.logo.icon) {
+                        logoContent += siteConfig.logo.icon + ' ';
+                    }
+                    if (siteConfig.logo.showText && siteConfig.logo.text) {
+                        logoContent += siteConfig.logo.text;
+                    }
+                    logoElement.textContent = logoContent || 'LinkBoard';
+                }
+                
+                // 根据功能配置显示/隐藏元素
+                if (siteConfig.features) {
+                    const searchBar = document.getElementById('searchBar');
+                    if (searchBar && !siteConfig.features.showSearch) {
+                        searchBar.style.display = 'none';
+                    }
+                }
+                
+                // 设置Dashboard标题
+                if (siteConfig.dashboard) {
+                    window.dashboardConfig = siteConfig.dashboard;
+                }
+            }
+        }
+        
+        // 硬编码favicon设置 - 确保favicon始终可用
+        function setFavicon() {
+            // 优先尝试SVG格式的favicon
+            const svgFavicon = './assets/icons/favicon.svg';
+            const pngFavicon = './assets/icons/favicon.png';
+            
+            // 检查现有的favicon链接
+            const existingFavicons = document.querySelectorAll('link[rel*="icon"]');
+            
+            // 如果没有现有的favicon链接，或者需要确保使用正确的路径
+            if (existingFavicons.length === 0) {
+                // 添加SVG favicon
+                const svgLink = document.createElement('link');
+                svgLink.rel = 'icon';
+                svgLink.type = 'image/svg+xml';
+                svgLink.href = svgFavicon;
+                document.head.appendChild(svgLink);
+                
+                // 添加PNG备用favicon
+                const pngLink = document.createElement('link');
+                pngLink.rel = 'icon';
+                pngLink.type = 'image/png';
+                pngLink.href = pngFavicon;
+                document.head.appendChild(pngLink);
+                
+                // 添加Apple Touch图标
+                const appleLink = document.createElement('link');
+                appleLink.rel = 'apple-touch-icon';
+                appleLink.href = pngFavicon;
+                document.head.appendChild(appleLink);
+            } else {
+                // 确保现有的favicon使用正确的路径
+                existingFavicons.forEach(link => {
+                    if (link.type === 'image/svg+xml' || link.href.includes('.svg')) {
+                        link.href = svgFavicon;
+                    } else if (link.type === 'image/png' || link.href.includes('.png') || link.rel === 'apple-touch-icon') {
+                        link.href = pngFavicon;
+                    }
+                });
+            }
+        }
+        
+        // 在DOM加载完成后应用配置
+        document.addEventListener('DOMContentLoaded', function() {
+            setFavicon(); // 首先设置favicon
+            applySiteConfig(); // 然后应用其他配置
+        });
+        
+        // 如果脚本已经加载，立即应用配置
+        if (document.readyState === 'complete') {
+            setFavicon();
+            applySiteConfig();
+        }
+    </script>
+    <script src="js/main.js"></script>
+</body>
+</html> 

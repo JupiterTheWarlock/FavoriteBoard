@@ -1,0 +1,199 @@
+/* 响应式设计 */
+
+/* 平板样式 */
+@media (max-width: 1024px) {
+  .links-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+  
+  .main-content {
+    padding: 1.5rem;
+    width: calc(100vw - var(--sidebar-width));
+    overflow-x: hidden;
+  }
+}
+
+/* 移动端样式 */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 100%;
+  }
+  
+  .app {
+    flex-direction: column;
+  }
+  
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 1rem;
+    width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+  
+  .category-nav {
+    padding: 1rem 1.5rem;
+  }
+  
+  .category-list {
+    display: flex;
+    overflow-x: auto;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  
+  .category-item {
+    flex-shrink: 0;
+    margin-bottom: 0;
+  }
+  
+  .category-btn {
+    white-space: nowrap;
+    padding: 0.5rem 1rem;
+  }
+  
+  .category-name {
+    display: none;
+  }
+  
+  .links-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .category-title {
+    font-size: 1.5rem;
+  }
+  
+  .search-bar {
+    max-width: 100%;
+  }
+  
+  /* DashBoard移动端适配 */
+  .dashboard-stats {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  
+  .stat-item {
+    padding: 1rem;
+  }
+  
+  .stat-number {
+    font-size: 2rem;
+  }
+  
+  .category-stats {
+    gap: 0.5rem;
+  }
+  
+  .category-stat {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* 小屏幕优化 */
+@media (max-width: 480px) {
+  .sidebar-header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .logo {
+    font-size: 1.2rem;
+  }
+  
+  .main-content {
+    padding: 0.75rem;
+    width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+  
+  .category-info {
+    margin-bottom: 1.5rem;
+  }
+  
+  .link-card {
+    padding: 1rem;
+  }
+  
+  .card-icon {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .card-title {
+    font-size: 1rem;
+  }
+}
+
+/* 超宽屏幕优化 */
+@media (min-width: 1200px) {
+  .links-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+  
+  .main-content {
+    padding: 2.5rem;
+  }
+}
+
+/* 高度优化 */
+@media (max-height: 600px) {
+  .sidebar-header {
+    padding: 1rem 1.5rem;
+  }
+  
+  .category-nav {
+    padding: 1rem 1.5rem;
+  }
+  
+  .category-item {
+    margin-bottom: 0.25rem;
+  }
+  
+  .category-btn {
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .sidebar {
+    display: none;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 1rem;
+  }
+  
+  .search-bar {
+    display: none;
+  }
+  
+  .link-card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+  
+  .link-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+} 
