@@ -165,7 +165,7 @@ class ToolboxApp {
       url: bookmark.url,
       description: bookmark.domain || '收藏夹链接',
       icon: null, // 将由getFavicon方法处理
-      tags: bookmark.tags || [],
+      tags: (bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
       categoryId: bookmark.parentId,
       categoryName: this.getCategoryName(bookmark.parentId),
       categoryIcon: this.getCategoryIcon(bookmark.parentId),
