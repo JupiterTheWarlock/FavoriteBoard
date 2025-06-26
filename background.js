@@ -190,7 +190,7 @@ function countBookmarksInFolder(folderNode) {
 function generateAutoTags(url) {
   try {
     const domain = extractDomain(url);
-    const tags = [domain];
+    const tags = [];  // 不再直接把域名加入标签列表
     
     // 根据常见域名添加分类标签
     const categoryMap = {

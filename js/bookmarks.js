@@ -201,7 +201,13 @@ class BookmarkManager {
     
     this.cache.flatBookmarks.forEach(bookmark => {
       if (bookmark.tags) {
-        bookmark.tags.forEach(tag => tagsSet.add(tag));
+        // 过滤掉不需要的标签
+        const filteredTags = bookmark.tags.filter(tag => {
+          // 过滤掉以常见域名后缀结尾的标签
+          const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
+          return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
+        });
+        filteredTags.forEach(tag => tagsSet.add(tag));
       }
     });
     
@@ -215,7 +221,13 @@ class BookmarkManager {
     
     bookmarks.forEach(bookmark => {
       if (bookmark.tags) {
-        bookmark.tags.forEach(tag => tagsSet.add(tag));
+        // 过滤掉不需要的标签
+        const filteredTags = bookmark.tags.filter(tag => {
+          // 过滤掉以常见域名后缀结尾的标签
+          const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
+          return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
+        });
+        filteredTags.forEach(tag => tagsSet.add(tag));
       }
     });
     
@@ -228,7 +240,7 @@ class BookmarkManager {
       const domain = new URL(url).hostname;
       const parts = domain.split('.');
       
-      // 生成标签数组，但剔除主域名（通常是第一个有意义的部分）
+      // 生成标签数组
       const tags = [];
       
       // 如果域名有多个部分，提取有意义的部分作为标签
@@ -239,7 +251,13 @@ class BookmarkManager {
         // 添加子域名作为标签（如果有的话）
         if (parts.length > 2) {
           const subdomains = parts.slice(0, -2);
-          tags.push(...subdomains.filter(part => part !== 'www' && part.length > 1));
+          // 只添加不是www且长度大于1的子域名，并且不添加以数字开头的子域名
+          tags.push(...subdomains.filter(part => 
+            part !== 'www' && 
+            part.length > 1 && 
+            !/^\d/.test(part) &&
+            !part.includes('.')  // 确保不包含点号
+          ));
         }
         
         // 可以根据特定域名添加分类标签
@@ -261,8 +279,14 @@ class BookmarkManager {
         }
       }
       
-      // 过滤掉空字符串和重复项
-      return [...new Set(tags.filter(tag => tag && tag.length > 0))];
+      // 过滤掉空字符串、重复项和域名后缀
+      return [...new Set(tags.filter(tag => {
+        if (!tag || tag.length === 0) return false;
+        
+        // 过滤掉以常见域名后缀结尾的标签
+        const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
+        return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
+      }))];
     } catch (error) {
       console.warn('❌ Error generating tags for URL:', url, error);
       return [];
