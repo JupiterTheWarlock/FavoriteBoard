@@ -162,7 +162,11 @@ class ToolboxApp {
       }
     });
     
+    // 构建文件夹扁平映射表以便快速查找
+    this.folderMap = this.buildFolderMap();
+    
     console.log('🌳 生成了文件夹树，根节点数量:', this.folderTree.length);
+    console.log('🗂️ 构建了文件夹映射表，包含', this.folderMap.size, '个文件夹');
   }
   
   // 处理文件夹节点
@@ -231,31 +235,95 @@ class ToolboxApp {
   // 生成所有链接数组
   generateAllLinks() {
     // 从收藏夹管理器获取所有收藏夹
-    this.allLinks = this.bookmarkManager.getAllBookmarks().map(bookmark => ({
-      id: bookmark.id, // 添加ID字段用于删除操作
-      title: bookmark.title,
-      url: bookmark.url,
-      description: bookmark.domain || '收藏夹链接',
-      icon: null, // 将由getFavicon方法处理
-      tags: bookmark.tags? bookmark.tags : [], //(bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
-      categoryId: bookmark.parentId,
-      categoryName: this.getCategoryName(bookmark.parentId),
-      categoryIcon: this.getCategoryIcon(bookmark.parentId),
-      dateAdded: bookmark.dateAdded,
-      domain: bookmark.domain
-    }));
+    this.allLinks = this.bookmarkManager.getAllBookmarks().map(bookmark => {
+      const categoryName = this.getCategoryName(bookmark.parentId);
+      const categoryIcon = this.getCategoryIcon(bookmark.parentId);
+      
+      // 调试信息：记录分类名称获取情况
+      if (categoryName === '未分类') {
+        console.log('🔍 发现未分类链接:', {
+          bookmarkTitle: bookmark.title,
+          parentId: bookmark.parentId,
+          获取到的分类名: categoryName
+        });
+      }
+      
+      return {
+        id: bookmark.id, // 添加ID字段用于删除操作
+        title: bookmark.title,
+        url: bookmark.url,
+        description: bookmark.domain || '收藏夹链接',
+        icon: null, // 将由getFavicon方法处理
+        tags: bookmark.tags? bookmark.tags : [], //(bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
+        categoryId: bookmark.parentId,
+        categoryName: categoryName,
+        categoryIcon: categoryIcon,
+        dateAdded: bookmark.dateAdded,
+        domain: bookmark.domain
+      };
+    });
     
     console.log('🔗 生成了', this.allLinks.length, '个链接');
+    
+    // 统计分类分布情况
+    const categoryStats = {};
+    this.allLinks.forEach(link => {
+      const catName = link.categoryName;
+      categoryStats[catName] = (categoryStats[catName] || 0) + 1;
+    });
+    console.log('📊 分类统计:', categoryStats);
   }
   
   // 获取分类名称
   getCategoryName(categoryId) {
+    // 首先尝试从文件夹扁平映射表中查找（最快）
+    if (this.folderMap && this.folderMap.has(categoryId)) {
+      const folder = this.folderMap.get(categoryId);
+      return folder.title;
+    }
+    
+    // 如果映射表不可用，尝试从文件夹树中查找
+    const folder = this.findFolderInTree(categoryId);
+    if (folder) {
+      return folder.title;
+    }
+    
+    // 如果找不到，尝试从收藏夹缓存的文件夹映射中查找
+    if (this.bookmarkManager && this.bookmarkManager.cache && this.bookmarkManager.cache.folderMap) {
+      const folderInfo = this.bookmarkManager.cache.folderMap[categoryId];
+      if (folderInfo && folderInfo.title) {
+        return folderInfo.title;
+      }
+    }
+    
+    // 兜底：从旧的分类系统查找（兼容性）
     const category = this.categories.find(cat => cat.id === categoryId);
     return category ? category.name : '未分类';
   }
   
   // 获取分类图标
   getCategoryIcon(categoryId) {
+    // 首先尝试从文件夹扁平映射表中查找（最快）
+    if (this.folderMap && this.folderMap.has(categoryId)) {
+      const folder = this.folderMap.get(categoryId);
+      return folder.icon;
+    }
+    
+    // 如果映射表不可用，尝试从文件夹树中查找
+    const folder = this.findFolderInTree(categoryId);
+    if (folder) {
+      return folder.icon;
+    }
+    
+    // 如果找不到，使用文件夹名称生成图标
+    if (this.bookmarkManager && this.bookmarkManager.cache && this.bookmarkManager.cache.folderMap) {
+      const folderInfo = this.bookmarkManager.cache.folderMap[categoryId];
+      if (folderInfo && folderInfo.title) {
+        return this.getFolderIcon(folderInfo.title, 0);
+      }
+    }
+    
+    // 兜底：从旧的分类系统查找（兼容性）
     const category = this.categories.find(cat => cat.id === categoryId);
     return category ? category.icon : '📂';
   }
@@ -351,7 +419,7 @@ class ToolboxApp {
     }
   }
   
-  // 在树中查找文件夹
+  // 在树中查找文件夹（包括所有层级的深度搜索）
   findFolderInTree(folderId, tree = null) {
     const searchTree = tree || this.folderTree;
     
@@ -367,6 +435,26 @@ class ToolboxApp {
     }
     
     return null;
+  }
+  
+  // 构建所有文件夹的扁平映射表（用于快速查找）
+  buildFolderMap() {
+    const folderMap = new Map();
+    
+    const traverseTree = (nodes) => {
+      nodes.forEach(node => {
+        folderMap.set(node.id, node);
+        if (node.children && node.children.length > 0) {
+          traverseTree(node.children);
+        }
+      });
+    };
+    
+    if (this.folderTree && this.folderTree.length > 0) {
+      traverseTree(this.folderTree);
+    }
+    
+    return folderMap;
   }
   
   // 获取文件夹及其所有子文件夹的ID列表
