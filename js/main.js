@@ -1,25 +1,41 @@
+// FavoriteBoard Plugin - 主应用程序
+// Tab容器管理器 - 重构后的简化版本
+
+/**
+ * ToolboxApp - Tab容器管理器
+ * 负责Tab的创建、切换和生命周期管理
+ */
 class ToolboxApp {
   constructor() {
-    this.currentCategory = null; // 默认为null，表示显示Dashboard
-    this.searchQuery = '';
-    this.filteredLinks = [];
-    this.allLinks = [];
-    this.selectedTags = new Set(); // 添加选中的Tag集合
-    this.bookmarkManager = new BookmarkManager(); // 添加收藏夹管理器
-    this.categories = []; // 动态生成的分类
-    this.isLoading = true; // 加载状态
+    // Tab管理相关
+    this.tabFactory = null;
+    this.currentTab = null;
+    this.registeredTabs = new Map();
     
-    // 右键菜单相关状态
-    this.currentContextMenu = null;
-    this.currentBookmarkForContext = null;
+    // 数据管理
+    this.bookmarkManager = new BookmarkManager();
+    this.allLinks = [];
+    this.folderTree = [];
+    this.folderMap = new Map();
+    this.isLoading = true;
+    
+    // UI元素缓存
+    this.searchInput = null;
+    this.categoryInfo = null;
+    this.mainContent = null;
+    
+    console.log('🐱 Tab管理器初始化开始...');
     
     // 检查扩展环境
     this.checkExtensionEnvironment();
     
+    // 初始化应用
     this.init();
   }
-
-  // 检查扩展环境
+  
+  /**
+   * 检查扩展环境
+   */
   checkExtensionEnvironment() {
     console.log('🔍 检查扩展环境...');
     console.log('Chrome对象:', typeof chrome);
@@ -32,28 +48,41 @@ class ToolboxApp {
       console.warn('⚠️ 扩展环境不可用，某些功能可能无法正常工作');
     }
   }
-
+  
+  /**
+   * 初始化应用
+   */
   async init() {
     try {
-      console.log('🐱 正在初始化收藏夹面板...');
+      console.log('🚀 初始化Tab管理器...');
       
       // 显示加载状态
       this.showLoadingState();
       
-      // 等待收藏夹数据加载
+      // 初始化Tab系统
+      this.initTabSystem();
+      
+      // 缓存UI元素
+      this.cacheUIElements();
+      
+      // 加载收藏夹数据
       await this.loadBookmarksData();
       
       // 生成文件夹树和链接数据
       this.generateFolderTreeFromBookmarks();
       this.generateAllLinks();
       
-      // 渲染界面
+      // 渲染文件夹树
       this.renderFolderTree();
-      this.renderLinks();
-      this.bindEvents();
       
-      // 初始状态不选中任何分类，显示Dashboard
-      this.updateCategoryInfo();
+      // 注册默认Tab
+      this.registerDefaultTabs();
+      
+      // 切换到默认Tab (Dashboard)
+      this.switchToTab('dashboard');
+      
+      // 绑定事件
+      this.bindEvents();
       
       // 监听收藏夹更新
       this.setupBookmarkListeners();
@@ -61,63 +90,338 @@ class ToolboxApp {
       // 隐藏加载状态
       this.hideLoadingState();
       
-      console.log('✅ 收藏夹面板初始化完成');
+      console.log('✅ Tab管理器初始化完成');
       
     } catch (error) {
-      console.error('❌ 初始化失败:', error);
+      console.error('❌ Tab管理器初始化失败:', error);
       this.showErrorState(error);
     }
   }
   
-  // 显示加载状态
-  showLoadingState() {
-    const linksGrid = document.getElementById('linksGrid');
-    const emptyState = document.getElementById('emptyState');
+  /**
+   * 初始化Tab系统
+   */
+  initTabSystem() {
+    // 创建Tab工厂
+    this.tabFactory = new TabFactory();
     
-    hideElement(linksGrid);
-    showElement(emptyState);
-    emptyState.innerHTML = `
-      <div class="loading-state">
-        <div class="loading-icon">🐱</div>
-        <div class="loading-text">正在加载收藏夹数据...</div>
-      </div>
-    `;
+    console.log('🏭 Tab工厂创建完成');
   }
   
-  // 隐藏加载状态
-  hideLoadingState() {
-    this.isLoading = false;
-    const linksGrid = document.getElementById('linksGrid');
-    const emptyState = document.getElementById('emptyState');
+  /**
+   * 缓存UI元素
+   */
+  cacheUIElements() {
+    this.searchInput = document.getElementById('searchInput');
+    this.categoryInfo = document.getElementById('categoryInfo');
+    this.mainContent = document.querySelector('.main-content');
+    this.linksGrid = document.getElementById('linksGrid');
+    this.emptyState = document.getElementById('emptyState');
     
-    hideElement(emptyState);
-    showElement(linksGrid, 'grid'); // 显示链接网格
+    console.log('📋 UI元素缓存完成');
   }
   
-  // 显示错误状态
-  showErrorState(error) {
-    const linksGrid = document.getElementById('linksGrid');
-    const emptyState = document.getElementById('emptyState');
+  /**
+   * 注册默认Tab
+   */
+  registerDefaultTabs() {
+    console.log('📋 注册默认Tab...');
     
-    hideElement(linksGrid);
-    showElement(emptyState);
-    emptyState.innerHTML = `
-      <div class="error-state">
-        <div class="error-icon">😿</div>
-        <div class="error-text">加载收藏夹数据失败</div>
-        <div class="error-detail">${error.message}</div>
-        <button class="retry-btn" id="retryBtn">重试</button>
-      </div>
-    `;
+    // 注册Dashboard Tab
+    this.registerTab('dashboard', null);
     
-    // 添加重试按钮事件监听器
-    const retryBtn = document.getElementById('retryBtn');
-    if (retryBtn) {
-      retryBtn.addEventListener('click', () => location.reload());
+    // 注册全部书签Tab
+    this.registerTab('bookmark', 'all', { 
+      id: 'all', 
+      title: '全部书签', 
+      icon: '🗂️',
+      bookmarkCount: this.allLinks.length 
+    });
+    
+    console.log('✅ 默认Tab注册完成');
+  }
+  
+  /**
+   * 注册Tab
+   * @param {string} type - Tab类型
+   * @param {string} instanceId - 实例ID  
+   * @param {Object} data - Tab数据
+   */
+  registerTab(type, instanceId = 'default', data = null) {
+    const tabKey = `${type}:${instanceId}`;
+    
+    if (this.registeredTabs.has(tabKey)) {
+      console.log(`🔄 Tab已存在: ${tabKey}`);
+      return this.registeredTabs.get(tabKey);
+    }
+    
+    let tab = null;
+    
+    try {
+      // 根据类型创建Tab
+      switch (type) {
+        case 'dashboard':
+          tab = this.tabFactory.createDashboardTab();
+          break;
+        case 'bookmark':
+          tab = this.tabFactory.createBookmarkTab(instanceId, data);
+          break;
+        default:
+          console.warn(`⚠️ 未知的Tab类型: ${type}`);
+          return null;
+      }
+      
+      if (tab) {
+        this.registeredTabs.set(tabKey, tab);
+        console.log(`✅ Tab注册成功: ${tabKey} - ${tab.getTitle()}`);
+      }
+      
+      return tab;
+      
+    } catch (error) {
+      console.error(`❌ Tab注册失败: ${tabKey}`, error);
+      return null;
     }
   }
   
-  // 加载收藏夹数据
+  /**
+   * 切换到指定Tab
+   * @param {string} type - Tab类型
+   * @param {string} instanceId - 实例ID
+   * @param {Object} data - Tab数据（可选）
+   */
+  async switchToTab(type, instanceId = 'default', data = null) {
+    const tabKey = `${type}:${instanceId}`;
+    
+    try {
+      console.log(`🔄 切换到Tab: ${tabKey}`);
+      
+      // 失活当前Tab
+      if (this.currentTab) {
+        this.currentTab.onDeactivate();
+      }
+      
+      // 获取或创建目标Tab
+      let targetTab = this.registeredTabs.get(tabKey);
+      if (!targetTab) {
+        targetTab = this.registerTab(type, instanceId, data);
+        if (!targetTab) {
+          throw new Error(`无法创建Tab: ${tabKey}`);
+        }
+      }
+      
+      // 渲染Tab内容
+      await this.renderTab(targetTab);
+      
+      // 激活新Tab
+      targetTab.onActivate();
+      this.currentTab = targetTab;
+      
+      // 更新文件夹树选中状态
+      this.updateFolderTreeSelection(type, instanceId);
+      
+      // 更新搜索栏显示状态
+      this.updateSearchBarVisibility();
+      
+      console.log(`✅ Tab切换完成: ${tabKey} - ${targetTab.getTitle()}`);
+      
+    } catch (error) {
+      console.error(`❌ Tab切换失败: ${tabKey}`, error);
+      this.showNotification('Tab切换失败', 'error');
+    }
+  }
+  
+  /**
+   * 渲染Tab内容
+   * @param {BaseTab} tab - Tab实例
+   */
+  async renderTab(tab) {
+    try {
+      // 获取内容容器
+      const container = this.getTabContentContainer();
+      
+      // 使用安全渲染方法
+      const success = await tab.safeRender(container);
+      
+      if (!success) {
+        throw new Error('Tab渲染失败');
+      }
+      
+    } catch (error) {
+      console.error('❌ Tab渲染失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 获取Tab内容容器
+   * @returns {HTMLElement}
+   */
+  getTabContentContainer() {
+    // 重用现有的链接网格容器
+    const container = this.linksGrid;
+    if (container) {
+      container.innerHTML = '';
+      container.className = 'tab-content-container';
+      return container;
+    }
+    
+    throw new Error('找不到Tab内容容器');
+  }
+  
+  /**
+   * 更新文件夹树选中状态
+   * @param {string} type - Tab类型
+   * @param {string} instanceId - 实例ID
+   */
+  updateFolderTreeSelection(type, instanceId) {
+    // 清除所有选中状态
+    const allItems = document.querySelectorAll('.tree-item');
+    allItems.forEach(item => item.classList.remove('active'));
+    
+    // 设置新的选中状态
+    let targetId = null;
+    if (type === 'dashboard') {
+      targetId = 'dashboard';
+    } else if (type === 'bookmark') {
+      targetId = instanceId;
+    }
+    
+    if (targetId) {
+      const targetItem = document.querySelector(`[data-folder-id="${targetId}"]`);
+      if (targetItem) {
+        targetItem.classList.add('active');
+      }
+    }
+  }
+  
+  /**
+   * 更新搜索栏显示状态
+   */
+  updateSearchBarVisibility() {
+    const searchBar = document.getElementById('searchBar');
+    if (searchBar && this.currentTab) {
+      const shouldShow = this.currentTab.supports('search');
+      searchBar.style.display = shouldShow ? 'block' : 'none';
+      
+      // 如果隐藏搜索栏，清空搜索内容
+      if (!shouldShow && this.searchInput) {
+        this.searchInput.value = '';
+      }
+    }
+  }
+  
+  // ==================== 事件处理 ====================
+  
+  /**
+   * 绑定事件
+   */
+  bindEvents() {
+    console.log('🔗 绑定事件监听器...');
+    
+    // 搜索事件
+    this.bindSearchEvents();
+    
+    // 文件夹树点击事件
+    this.bindFolderTreeEvents();
+    
+    // 窗口大小变化事件
+    this.bindWindowEvents();
+    
+    console.log('✅ 事件绑定完成');
+  }
+  
+  /**
+   * 绑定搜索事件
+   */
+  bindSearchEvents() {
+    if (!this.searchInput) return;
+    
+    // 搜索输入事件
+    this.searchInput.addEventListener('input', (e) => {
+      const query = e.target.value;
+      this.handleSearch(query);
+    });
+    
+    // 清空搜索按钮
+    const clearBtn = document.getElementById('clearSearch');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        this.clearSearch();
+      });
+    }
+  }
+  
+  /**
+   * 绑定文件夹树事件
+   */
+  bindFolderTreeEvents() {
+    const folderTree = document.getElementById('folderTree');
+    if (!folderTree) return;
+    
+    folderTree.addEventListener('click', (e) => {
+      const treeItem = e.target.closest('.tree-item');
+      if (!treeItem) return;
+      
+      const folderId = treeItem.dataset.folderId;
+      
+      if (folderId === 'dashboard') {
+        // 切换到Dashboard
+        this.switchToTab('dashboard');
+      } else if (folderId) {
+        // 切换到收藏夹Tab
+        const folderData = this.folderMap.get(folderId);
+        this.switchToTab('bookmark', folderId, folderData);
+      }
+    });
+  }
+  
+  /**
+   * 绑定窗口事件
+   */
+  bindWindowEvents() {
+    // 窗口大小变化
+    window.addEventListener('resize', () => {
+      if (this.currentTab) {
+        this.currentTab.onResize();
+      }
+    });
+  }
+  
+  /**
+   * 处理搜索
+   * @param {string} query - 搜索查询
+   */
+  handleSearch(query) {
+    if (!this.currentTab || !this.currentTab.supports('search')) {
+      return;
+    }
+    
+    // 转发搜索事件到当前Tab
+    this.currentTab.onSearch(query);
+    
+    // 更新清空按钮显示状态
+    const clearBtn = document.getElementById('clearSearch');
+    if (clearBtn) {
+      clearBtn.style.display = query ? 'block' : 'none';
+    }
+  }
+  
+  /**
+   * 清空搜索
+   */
+  clearSearch() {
+    if (this.searchInput) {
+      this.searchInput.value = '';
+      this.handleSearch('');
+    }
+  }
+  
+  // ==================== 数据管理方法 ====================
+  
+  /**
+   * 加载收藏夹数据
+   */
   async loadBookmarksData() {
     try {
       await this.bookmarkManager.loadBookmarks();
@@ -128,7 +432,9 @@ class ToolboxApp {
     }
   }
   
-  // 从收藏夹数据生成文件夹树
+  /**
+   * 从收藏夹数据生成文件夹树
+   */
   generateFolderTreeFromBookmarks() {
     // 获取原始收藏夹树结构
     const rawTree = this.bookmarkManager.cache?.tree || [];
@@ -169,7 +475,9 @@ class ToolboxApp {
     console.log('🗂️ 构建了文件夹映射表，包含', this.folderMap.size, '个文件夹');
   }
   
-  // 处理文件夹节点
+  /**
+   * 处理文件夹节点
+   */
   processFolderNode(node, depth) {
     const folderInfo = this.bookmarkManager.cache?.folderMap[node.id] || {};
     
@@ -199,274 +507,56 @@ class ToolboxApp {
     return folderNode;
   }
   
-  // 获取文件夹图标
-  getFolderIcon(folderTitle, depth) {
-    const title = folderTitle.toLowerCase();
-    
-    // 根据文件夹名称返回相应图标
-    if (title.includes('工作') || title.includes('work')) return '💼';
-    if (title.includes('学习') || title.includes('study')) return '📚';
-    if (title.includes('娱乐') || title.includes('entertainment')) return '🎮';
-    if (title.includes('开发') || title.includes('dev')) return '💻';
-    if (title.includes('新闻') || title.includes('news')) return '📰';
-    if (title.includes('购物') || title.includes('shop')) return '🛒';
-    if (title.includes('社交') || title.includes('social')) return '👥';
-    if (title.includes('工具') || title.includes('tool')) return '🔧';
-    if (title.includes('设计') || title.includes('design')) return '🎨';
-    if (title.includes('音乐') || title.includes('music')) return '🎵';
-    if (title.includes('视频') || title.includes('video')) return '📹';
-    
-    // 根据深度返回默认图标
-    const depthIcons = ['📂', '📁', '🗂️', '📄'];
-    return depthIcons[Math.min(depth, depthIcons.length - 1)];
-  }
-  
-  // 设置收藏夹事件监听
-  setupBookmarkListeners() {
-    this.bookmarkManager.on('bookmarks-updated', () => {
-      console.log('🔄 收藏夹已更新，重新渲染...');
-      this.generateFolderTreeFromBookmarks();
-      this.generateAllLinks();
-      this.renderFolderTree();
-      this.renderLinks();
-    });
-  }
-
-  // 生成所有链接数组
+  /**
+   * 生成所有链接数据
+   */
   generateAllLinks() {
-    // 从收藏夹管理器获取所有收藏夹
-    this.allLinks = this.bookmarkManager.getAllBookmarks().map(bookmark => {
-      const categoryName = this.getCategoryName(bookmark.parentId);
-      const categoryIcon = this.getCategoryIcon(bookmark.parentId);
-      
-      // 调试信息：记录分类名称获取情况
-      if (categoryName === '未分类') {
-        console.log('🔍 发现未分类链接:', {
-          bookmarkTitle: bookmark.title,
-          parentId: bookmark.parentId,
-          获取到的分类名: categoryName
-        });
-      }
-      
-      return {
-        id: bookmark.id, // 添加ID字段用于删除操作
-        title: bookmark.title,
-        url: bookmark.url,
-        description: bookmark.domain || '收藏夹链接',
-        icon: null, // 将由getFavicon方法处理
-        tags: bookmark.tags? bookmark.tags : [], //(bookmark.tags && bookmark.tags.length > 0) ? bookmark.tags.slice(1) : [],
-        categoryId: bookmark.parentId,
-        categoryName: categoryName,
-        categoryIcon: categoryIcon,
-        dateAdded: bookmark.dateAdded,
-        domain: bookmark.domain
-      };
-    });
+    const allBookmarks = this.bookmarkManager.cache?.allBookmarks || [];
     
-    console.log('🔗 生成了', this.allLinks.length, '个链接');
+    this.allLinks = allBookmarks.map(bookmark => ({
+      id: bookmark.id,
+      title: bookmark.title,
+      url: bookmark.url,
+      parentId: bookmark.parentId,
+      folderId: bookmark.parentId,
+      iconUrl: bookmark.iconUrl || this.generateFaviconUrl(bookmark.url),
+      tags: this.extractTagsFromTitle(bookmark.title),
+      dateAdded: bookmark.dateAdded,
+      dateGrouped: bookmark.dateGrouped
+    }));
     
-    // 统计分类分布情况
-    const categoryStats = {};
-    this.allLinks.forEach(link => {
-      const catName = link.categoryName;
-      categoryStats[catName] = (categoryStats[catName] || 0) + 1;
-    });
-    console.log('📊 分类统计:', categoryStats);
+    console.log('🔗 生成了所有链接数据，共', this.allLinks.length, '个链接');
   }
   
-  // 获取分类名称
-  getCategoryName(categoryId) {
-    // 首先尝试从文件夹扁平映射表中查找（最快）
-    if (this.folderMap && this.folderMap.has(categoryId)) {
-      const folder = this.folderMap.get(categoryId);
-      return folder.title;
-    }
-    
-    // 如果映射表不可用，尝试从文件夹树中查找
-    const folder = this.findFolderInTree(categoryId);
-    if (folder) {
-      return folder.title;
-    }
-    
-    // 如果找不到，尝试从收藏夹缓存的文件夹映射中查找
-    if (this.bookmarkManager && this.bookmarkManager.cache && this.bookmarkManager.cache.folderMap) {
-      const folderInfo = this.bookmarkManager.cache.folderMap[categoryId];
-      if (folderInfo && folderInfo.title) {
-        return folderInfo.title;
-      }
-    }
-    
-    // 兜底：从旧的分类系统查找（兼容性）
-    const category = this.categories.find(cat => cat.id === categoryId);
-    return category ? category.name : '未分类';
-  }
-  
-  // 获取分类图标
-  getCategoryIcon(categoryId) {
-    // 首先尝试从文件夹扁平映射表中查找（最快）
-    if (this.folderMap && this.folderMap.has(categoryId)) {
-      const folder = this.folderMap.get(categoryId);
-      return folder.icon;
-    }
-    
-    // 如果映射表不可用，尝试从文件夹树中查找
-    const folder = this.findFolderInTree(categoryId);
-    if (folder) {
-      return folder.icon;
-    }
-    
-    // 如果找不到，使用文件夹名称生成图标
-    if (this.bookmarkManager && this.bookmarkManager.cache && this.bookmarkManager.cache.folderMap) {
-      const folderInfo = this.bookmarkManager.cache.folderMap[categoryId];
-      if (folderInfo && folderInfo.title) {
-        return this.getFolderIcon(folderInfo.title, 0);
-      }
-    }
-    
-    // 兜底：从旧的分类系统查找（兼容性）
-    const category = this.categories.find(cat => cat.id === categoryId);
-    return category ? category.icon : '📂';
-  }
-
-  // 渲染文件夹树
-  renderFolderTree() {
-    const folderTreeContainer = document.getElementById('folderTree');
-    if (!folderTreeContainer) {
-      console.error('❌ 找不到文件夹树容器元素');
-      return;
-    }
-    
-    folderTreeContainer.innerHTML = ''; // 清空现有内容
-    
-    if (!this.folderTree || this.folderTree.length === 0) {
-      folderTreeContainer.innerHTML = '<div class="empty-tree">没有找到收藏夹</div>';
-      return;
-    }
-    
-    // 渲染文件夹树节点
-    this.folderTree.forEach(node => {
-      const nodeElement = this.createTreeNode(node);
-      folderTreeContainer.appendChild(nodeElement);
-    });
-    
-    console.log('🌳 文件夹树渲染完成');
-  }
-  
-  // 创建树节点元素
-  createTreeNode(node, depth = 0) {
-    const nodeContainer = document.createElement('div');
-    nodeContainer.className = 'tree-node';
-    
-    // 创建节点项
-    const nodeItem = document.createElement('div');
-    nodeItem.className = `tree-item ${node.isSpecial ? 'root-folder' : ''} ${node.bookmarkCount === 0 ? 'empty-folder' : ''}`;
-    nodeItem.setAttribute('data-depth', depth);
-    nodeItem.setAttribute('data-folder-id', node.id);
-    
-    // 展开/折叠箭头
-    const hasChildren = node.children && node.children.length > 0;
-    const expandIcon = hasChildren ? '▶' : '';
-    const expandClass = hasChildren ? (node.isExpanded ? 'expanded' : '') : 'leaf';
-    
-    nodeItem.innerHTML = `
-      <span class="tree-expand ${expandClass}" data-folder-id="${node.id}">
-        ${expandIcon}
-      </span>
-      <span class="tree-icon">${node.icon}</span>
-      <span class="tree-name">${node.title}</span>
-      <span class="tree-count">${node.bookmarkCount}</span>
-    `;
-    
-    nodeContainer.appendChild(nodeItem);
-    
-    // 创建子节点容器
-    if (hasChildren) {
-      const childrenContainer = document.createElement('div');
-      childrenContainer.className = `tree-children ${node.isExpanded ? 'expanded' : 'collapsed'}`;
-      
-      node.children.forEach(child => {
-        const childNode = this.createTreeNode(child, depth + 1);
-        childrenContainer.appendChild(childNode);
-      });
-      
-      nodeContainer.appendChild(childrenContainer);
-    }
-    
-    return nodeContainer;
-  }
-  
-  // 切换文件夹展开/折叠状态
-  toggleFolder(folderId) {
-    const folder = this.findFolderInTree(folderId);
-    if (!folder) return;
-    
-    folder.isExpanded = !folder.isExpanded;
-    
-    // 更新UI
-    const expandBtn = document.querySelector(`[data-folder-id="${folderId}"].tree-expand`);
-    const childrenContainer = expandBtn?.closest('.tree-node')?.querySelector('.tree-children');
-    
-    if (expandBtn && childrenContainer) {
-      if (folder.isExpanded) {
-        expandBtn.classList.add('expanded');
-        childrenContainer.classList.remove('collapsed');
-        childrenContainer.classList.add('expanded');
-      } else {
-        expandBtn.classList.remove('expanded');
-        childrenContainer.classList.remove('expanded');
-        childrenContainer.classList.add('collapsed');
-      }
-    }
-  }
-  
-  // 在树中查找文件夹（包括所有层级的深度搜索）
-  findFolderInTree(folderId, tree = null) {
-    const searchTree = tree || this.folderTree;
-    
-    for (const node of searchTree) {
-      if (node.id === folderId) {
-        return node;
-      }
-      
-      if (node.children && node.children.length > 0) {
-        const found = this.findFolderInTree(folderId, node.children);
-        if (found) return found;
-      }
-    }
-    
-    return null;
-  }
-  
-  // 构建所有文件夹的扁平映射表（用于快速查找）
+  /**
+   * 构建文件夹映射表
+   */
   buildFolderMap() {
-    const folderMap = new Map();
+    const map = new Map();
     
     const traverseTree = (nodes) => {
       nodes.forEach(node => {
-        folderMap.set(node.id, node);
+        map.set(node.id, node);
         if (node.children && node.children.length > 0) {
           traverseTree(node.children);
         }
       });
     };
     
-    if (this.folderTree && this.folderTree.length > 0) {
-      traverseTree(this.folderTree);
-    }
-    
-    return folderMap;
+    traverseTree(this.folderTree);
+    return map;
   }
   
-  // 获取文件夹及其所有子文件夹的ID列表
+  /**
+   * 获取文件夹及其子文件夹的ID
+   * @param {string} folderId - 文件夹ID
+   * @returns {Array} 文件夹ID数组
+   */
   getFolderAndSubfolderIds(folderId) {
-    const folder = this.findFolderInTree(folderId);
-    if (!folder) return [folderId]; // 如果找不到文件夹，返回原ID（兼容性）
-    
     const ids = [folderId];
     
-    // 递归收集子文件夹IDs
     function collectChildIds(node) {
-      if (node.children && node.children.length > 0) {
+      if (node.children) {
         node.children.forEach(child => {
           ids.push(child.id);
           collectChildIds(child);
@@ -474,1363 +564,242 @@ class ToolboxApp {
       }
     }
     
-    collectChildIds(folder);
+    const folder = this.folderMap.get(folderId);
+    if (folder) {
+      collectChildIds(folder);
+    }
+    
     return ids;
   }
-
-  // 渲染链接
-  async renderLinks() {
-    const linksGrid = document.querySelector('.links-grid');
+  
+  // ==================== 文件夹树渲染 ====================
+  
+  /**
+   * 渲染文件夹树
+   */
+  renderFolderTree() {
+    const folderTreeContainer = document.getElementById('folderTree');
+    if (!folderTreeContainer) return;
     
-    // 添加调试信息
-    console.log('🔍 renderLinks 调试信息:', {
-      currentCategory: this.currentCategory,
-      allLinksLength: this.allLinks ? this.allLinks.length : 0,
-      searchQuery: this.searchQuery,
-      selectedTags: Array.from(this.selectedTags || []),
-      linksGridElement: !!linksGrid
+    // 清空现有内容
+    folderTreeContainer.innerHTML = '';
+    
+    // 添加Dashboard节点
+    const dashboardNode = this.createDashboardNode();
+    folderTreeContainer.appendChild(dashboardNode);
+    
+    // 渲染文件夹树
+    this.folderTree.forEach(node => {
+      const treeNode = this.createTreeNode(node);
+      folderTreeContainer.appendChild(treeNode);
     });
     
-    try {
-      // 首先显示加载状态
-      this.showLoadingState();
-      
-      // Dashboard状态下优先渲染统计信息，不等待任何异步操作
-      if (this.currentCategory === null /*|| this.currentCategory === 'dashboard'*/) {
-        console.log('📊 渲染Dashboard模式');
-        this.clearLinksGrid();
-        this.hideLoadingState();
-        
-        // 立即渲染Dashboard统计，不等待任何异步操作
-        this.renderDashboardStats();
-        return;
-      }
-      
-      // 获取当前分类的链接
-      const links = this.getCurrentLinks();
-      console.log('📝 获取到的链接数量:', links ? links.length : 0);
-      
-      // 清空当前内容
-      this.clearLinksGrid();
-      
-      // 检查是否有链接
-      if (!links || links.length === 0) {
-        console.log('❌ 没有链接可显示');
-        this.hideLoadingState();
-        
-        const emptyMessage = this.searchQuery 
-          ? '没有找到匹配的链接 🔍' 
-          : '该分类暂无链接 📝';
-          
-        linksGrid.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">📭</div>
-            <h3>${emptyMessage}</h3>
-            <p>尝试搜索其他关键词或查看其他分类</p>
-          </div>
-        `;
-        
-        // 确保链接网格容器可见
-        showElement(linksGrid, 'grid');
-        
-        this.updateLinkCount(0);
-        return;
-      }
-      
-      console.log('✅ 开始渲染链接卡片...');
-      
-      // 立即渲染所有链接卡片（使用默认图标）
-      const fragment = document.createDocumentFragment();
-      links.forEach((link, index) => {
-        const card = this.createLinkCard(link);
-        // 为卡片添加渐进式动画延迟
-        card.style.animationDelay = `${Math.min(index * 0.05, 0.4)}s`;
-        fragment.appendChild(card);
-      });
-      
-      linksGrid.appendChild(fragment);
-      
-      // 立即隐藏加载状态，显示内容
-      this.hideLoadingState();
-      
-      // 更新链接数量
-      this.updateLinkCount(links.length);
-      
-      // 更新分类信息
-      this.updateCategoryInfo();
-      
-      // 渲染标签筛选器（如果需要）
-      this.renderTagFilters();
-      
-      console.log(`✅ 已渲染 ${links.length} 个链接卡片`);
-      
-    } catch (error) {
-      console.error('❌ 渲染链接时出错:', error);
-      this.showErrorState(error);
-    }
-  }
-
-  // 清理链接网格内容
-  clearLinksGrid() {
-    const linksGrid = document.querySelector('.links-grid');
-    
-    if (!linksGrid) {
-      console.warn('⚠️ 找不到 .links-grid 元素');
-      return;
-    }
-    
-    // 直接清空所有内容，这样能确保移除所有子元素
-    // 包括链接卡片、Dashboard统计、空状态消息等所有内容
-    linksGrid.innerHTML = '';
-    
-    // Tag筛选器现在是独立的，不需要在这里清理
-  }
-
-  // 渲染Tag筛选器
-  renderTagFilters() {
-    const filterSection = document.getElementById('tagFilterSection');
-    const tagList = document.getElementById('tagList');
-    const clearTagsBtn = document.getElementById('clearTagsBtn');
-    
-    // 获取当前分类的所有Tag
-    const currentTags = this.getCurrentCategoryTags();
-    
-    if (currentTags.length === 0) {
-      // 没有Tag时隐藏筛选区域
-      hideElement(filterSection);
-      return;
-    }
-    
-    // 显示筛选区域
-    showElement(filterSection);
-    
-    // 更新清除按钮显示状态
-    toggleElement(clearTagsBtn, this.selectedTags.size > 0, 'inline-block');
-    
-    // 渲染Tag按钮
-    tagList.innerHTML = currentTags.map(tag => `
-      <button class="tag-filter-btn ${this.selectedTags.has(tag) ? 'active' : ''}" 
-              data-tag="${tag}">
-        ${tag}
-      </button>
-    `).join('');
-  }
-
-  // 获取当前分类的所有Tag
-  getCurrentCategoryTags() {
-    // 如果是"全部"页面，返回所有分类的Tag
-    if (this.currentCategory === 'all') {
-      return this.getAllCategoriesTags();
-    }
-    
-    // 获取当前分类的链接
-    const categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
-    const tagsSet = new Set();
-    
-    categoryLinks.forEach(link => {
-      if (link.tags && Array.isArray(link.tags)) {
-        link.tags.forEach(tag => tagsSet.add(tag));
-      }
-    });
-    
-    return Array.from(tagsSet).sort();
-  }
-
-  // 获取所有分类的Tag（用于"全部"页面）
-  getAllCategoriesTags() {
-    const tagsSet = new Set();
-    
-    // 遍历所有链接
-    this.allLinks.forEach(link => {
-      if (link.tags && Array.isArray(link.tags)) {
-        // 过滤掉域名标签（通常是第一个，或者以.com/.org等结尾的）
-        const filteredTags = link.tags.filter((tag, index) => {
-          // 跳过第一个标签（通常是域名）
-          if (index === 0) return false;
-          // 跳过明显的域名标签
-          return !this.isDomainTag(tag);
-        });
-        filteredTags.forEach(tag => tagsSet.add(tag));
-      }
-    });
-    
-    return Array.from(tagsSet).sort();
-  }
-
-  // 判断是否是域名标签
-  isDomainTag(tag) {
-    if (!tag || typeof tag !== 'string') return false;
-    
-    // 检查是否包含常见域名后缀
-    const domainSuffixes = ['.com', '.org', '.net', '.cn', '.io', '.me', '.co', '.gov', '.edu'];
-    return domainSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
-  }
-
-  // 渲染DashBoard统计信息
-  renderDashboardStats() {
-    const linksGrid = document.querySelector('.links-grid');
-    
-    if (!linksGrid) {
-      console.warn('⚠️ 找不到 .links-grid 元素');
-      return;
-    }
-    
-    // 计算统计数据
-    const totalLinks = this.allLinks.length;
-    const categoryStats = {};
-    
-    this.categories.forEach(cat => {
-      if (cat.id !== 'all' /*&& cat.id !== 'dashboard'*/) {
-        const count = this.allLinks.filter(link => link.categoryId === cat.id).length;
-        if (count > 0) { // 只显示有链接的分类
-          categoryStats[cat.id] = {
-            name: cat.name,
-            icon: cat.icon,
-            color: cat.color,
-            count: count
-          };
-        }
-      }
-    });
-    
-    // 获取收藏夹统计信息
-    const bookmarkStats = this.bookmarkManager.getStats();
-    
-    // 创建统计卡片
-    const statsCard = document.createElement('div');
-    statsCard.className = 'dashboard-stats';
-    statsCard.innerHTML = `
-      <div class="stats-header">
-        <h3>📊 收藏夹统计</h3>
-        <p>您的收藏夹概览</p>
-      </div>
-      <div class="stats-grid">
-        <div class="stat-item total">
-          <span class="stat-number">${totalLinks}</span>
-          <span class="stat-label">总收藏夹</span>
-        </div>
-        <div class="stat-item categories">
-          <span class="stat-number">${Object.keys(categoryStats).length}</span>
-          <span class="stat-label">文件夹数量</span>
-        </div>
-        <div class="stat-item tags">
-          <span class="stat-number">${bookmarkStats.totalTags || 0}</span>
-          <span class="stat-label">标签数量</span>
-        </div>
-        <div class="stat-item domains">
-          <span class="stat-number">${bookmarkStats.totalDomains || 0}</span>
-          <span class="stat-label">不同域名</span>
-        </div>
-      </div>
-      <div class="category-stats">
-        ${Object.values(categoryStats).map(stat => `
-          <div class="category-stat" style="border-left: 4px solid ${stat.color}">
-            <span class="category-icon">${stat.icon}</span>
-            <span class="category-name">${stat.name}</span>
-            <span class="category-count">${stat.count}</span>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    
-    linksGrid.appendChild(statsCard);
-    
-    // 确保链接网格容器可见
-    showElement(linksGrid, 'grid');
-  }
-
-  // 获取默认图标
-  getDefaultIcon() {
-    // 如果utils.js可用，使用工具函数，否则使用内置默认图标
-    if (typeof getDefaultLinkIcon === 'function') {
-      return getDefaultLinkIcon();
-    }
-    
-    return 'data:image/svg+xml;base64,' + btoa(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-      </svg>
-    `);
-  }
-
-  // 获取安全的图标URL
-  getSafeIcon(iconUrl, websiteUrl = null) {
-    // 1. 检查提供的图标URL是否有效
-    if (iconUrl && typeof iconUrl === 'string' && iconUrl.trim() !== '') {
-      const trimmedIcon = iconUrl.trim();
-      
-      // 检查是否是有效的URL或data URI
-      if (this.isValidIconUrl(trimmedIcon)) {
-        return trimmedIcon;
-      }
-    }
-    
-    // 2. 尝试从网站URL生成favicon URL
-    if (websiteUrl && typeof getFaviconUrl === 'function') {
-      try {
-        const faviconUrl = getFaviconUrl(websiteUrl);
-        if (faviconUrl && faviconUrl !== this.getDefaultIcon()) {
-          return faviconUrl;
-        }
-      } catch (e) {
-        console.log('无法生成favicon URL:', e);
-      }
-    }
-    
-    // 3. 返回默认图标
-    return this.getDefaultIcon();
-  }
-
-  // 验证图标URL是否有效（本地方法，以防utils.js不可用）
-  isValidIconUrl(iconUrl) {
-    if (!iconUrl || typeof iconUrl !== 'string' || iconUrl.trim() === '') {
-      return false;
-    }
-    
-    // 检查是否是data URI
-    if (iconUrl.startsWith('data:')) {
-      return true;
-    }
-    
-    // 简单的URL格式验证
-    try {
-      new URL(iconUrl);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // 创建链接卡片
-  createLinkCard(link) {
-    const card = document.createElement('div');
-    card.className = 'link-card';
-    card.dataset.bookmarkId = link.id || '';
-    card.dataset.bookmarkUrl = link.url;
-    card.dataset.bookmarkTitle = link.title;
-    
-    // 左键点击打开链接
-    card.addEventListener('click', (e) => {
-      // 如果是右键点击，不执行打开链接
-      if (e.button === 2) return;
-      window.open(link.url, '_blank');
-    });
-    
-    // 右键菜单事件
-    card.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      this.showContextMenu(e, link, card);
-    });
-    
-    // 过滤掉域名标签（第一个标签通常是域名）
-    const filteredTags = link.tags ? link.tags/*.slice(1)*/ : [];
-    
-    const tagsHTML = filteredTags.length > 0 ? 
-      `<div class="card-tags">
-        ${filteredTags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-      </div>` : '';
-    
-    // 如果是dashboard页面、全部页面或全局搜索，显示分类信息
-    const categoryBadge = (/*this.currentCategory === 'dashboard' ||*/ this.currentCategory === 'all' || this.searchQuery) && link.categoryName ? 
-      `<div class="category-badge">
-        <span class="category-badge-icon">${link.categoryIcon}</span>
-        <span class="category-badge-name">${link.categoryName}</span>
-      </div>` : '';
-    
-    // 先使用默认图标，然后异步加载真实图标
-    const defaultIcon = this.getDefaultIcon();
-    
-    card.innerHTML = `
-      <div class="card-header">
-        <img class="card-icon" src="${defaultIcon}" alt="${link.title}" data-loading="true">
-        <h3 class="card-title">${link.title}</h3>
-      </div>
-      ${categoryBadge}
-      <p class="card-description">${link.description}</p>
-      ${tagsHTML}
-    `;
-    
-    // 异步加载真实图标，不阻塞页面渲染
-    const iconImg = card.querySelector('.card-icon');
-    this.loadIconAsync(iconImg, link.icon, link.url);
-    
-    return card;
-  }
-
-  // 异步加载图标
-  async loadIconAsync(imgElement, iconUrl, websiteUrl) {
-    try {
-      // 如果有自定义图标，先尝试加载
-      if (iconUrl && this.isValidIconUrl(iconUrl)) {
-        await this.tryLoadIcon(imgElement, iconUrl);
-        return;
-      }
-      
-      // 否则尝试获取网站的favicon
-      if (websiteUrl) {
-        const faviconUrl = await this.getFaviconAsync(websiteUrl);
-        if (faviconUrl) {
-          await this.tryLoadIcon(imgElement, faviconUrl);
-          return;
-        }
-      }
-      
-      // 如果都失败了，保持默认图标
-      imgElement.removeAttribute('data-loading');
-    } catch (error) {
-      console.warn('⚠️ Failed to load icon for:', websiteUrl, error);
-      imgElement.removeAttribute('data-loading');
-    }
-  }
-
-  // 尝试加载图标
-  async tryLoadIcon(imgElement, iconUrl) {
-    return new Promise((resolve, reject) => {
-      const testImg = new Image();
-      
-      testImg.onload = () => {
-        imgElement.src = iconUrl;
-        imgElement.removeAttribute('data-loading');
-        resolve();
-      };
-      
-      testImg.onerror = () => {
-        reject(new Error('Failed to load icon'));
-      };
-      
-      // 设置超时，避免长时间等待
-      setTimeout(() => {
-        reject(new Error('Icon load timeout'));
-      }, 5000);
-      
-      testImg.src = iconUrl;
-    });
-  }
-
-  // 异步获取favicon
-  async getFaviconAsync(url) {
-    try {
-      if (this.bookmarkManager && typeof this.bookmarkManager.getFavicon === 'function') {
-        return await this.bookmarkManager.getFavicon(url);
-      }
-      
-      // 如果没有bookmarkManager，使用简单的域名favicon
-      if (typeof getFaviconUrl === 'function') {
-        return getFaviconUrl(url);
-      }
-      
-      return null;
-    } catch (error) {
-      console.warn('⚠️ Error getting favicon:', error);
-      return null;
-    }
-  }
-
-  // 获取当前分类的链接
-  getCurrentLinks() {
-    console.log('🔍 getCurrentLinks 调试信息:', {
-      currentCategory: this.currentCategory,
-      allLinksLength: this.allLinks ? this.allLinks.length : 0,
-      searchQuery: this.searchQuery,
-      selectedTagsSize: this.selectedTags ? this.selectedTags.size : 0
-    });
-    
-    // Dashboard状态下不返回链接
-    if (this.currentCategory === null) {
-      console.log('🏠 Dashboard状态，返回空数组');
-      return [];
-    }
-    
-    let categoryLinks;
-    
-    // 如果有搜索查询，在all分类或当前分类中搜索
-    if (this.searchQuery) {
-      if (this.currentCategory === 'all') {
-        // 在"全部"分类中，搜索所有链接
-        categoryLinks = this.allLinks.filter(link => 
-          link.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          link.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          link.categoryName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          (link.tags && link.tags.some(tag => 
-            tag.toLowerCase().includes(this.searchQuery.toLowerCase())
-          ))
-        );
-      } else {
-        // 在其他分类/文件夹中，只搜索当前分类/文件夹的链接
-        const folderIds = this.getFolderAndSubfolderIds(this.currentCategory);
-        const currentCategoryLinks = this.allLinks.filter(link => 
-          folderIds.includes(link.categoryId)
-        );
-        categoryLinks = currentCategoryLinks.filter(link =>
-          link.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          link.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-          (link.tags && link.tags.some(tag => 
-            tag.toLowerCase().includes(this.searchQuery.toLowerCase())
-          ))
-        );
-      }
-    } else {
-      // 否则返回当前分类的链接
-      if (this.currentCategory === 'all') {
-        categoryLinks = this.allLinks;
-      } else {
-        // 检查是否是文件夹，如果是则需要包含子文件夹的书签
-        const folderIds = this.getFolderAndSubfolderIds(this.currentCategory);
-        if (folderIds.length > 0) {
-          categoryLinks = this.allLinks.filter(link => folderIds.includes(link.categoryId));
-        } else {
-          // 兼容旧版分类
-          categoryLinks = this.allLinks.filter(link => link.categoryId === this.currentCategory);
-        }
-      }
-    }
-    
-    console.log('📝 分类筛选后的链接数量:', categoryLinks ? categoryLinks.length : 0);
-    
-    // Tag筛选
-    if (this.selectedTags.size > 0) {
-      const beforeTagFilter = categoryLinks.length;
-      categoryLinks = categoryLinks.filter(link => {
-        if (!link.tags || !Array.isArray(link.tags)) return false;
-        
-        // 只要包含任一选中的tag即可显示
-        return Array.from(this.selectedTags).some(selectedTag => 
-          link.tags.includes(selectedTag)
-        );
-      });
-      console.log(`🏷️ Tag筛选：${beforeTagFilter} -> ${categoryLinks.length}`);
-    }
-    
-    // 按照 dateAdded 时间倒序排序（最新的在前面）
-    if (categoryLinks && categoryLinks.length > 0) {
-      categoryLinks.sort((a, b) => {
-        // 处理可能缺失的 dateAdded 字段
-        const dateA = a.dateAdded ? parseInt(a.dateAdded) : 0;
-        const dateB = b.dateAdded ? parseInt(b.dateAdded) : 0;
-        return dateB - dateA; // 倒序：newer first
-      });
-      console.log('🔄 已按时间倒序排列链接');
-    }
-    
-    console.log('🎯 最终返回的链接数量:', categoryLinks ? categoryLinks.length : 0);
-    return categoryLinks;
-  }
-
-  // 更新分类信息
-  updateCategoryInfo() {
-    const categoryTitle = document.querySelector('.category-title');
-    const categoryDesc = document.querySelector('.category-desc');
-    const searchBar = document.getElementById('searchBar');
-    
-    if (this.currentCategory === null) {
-      // Dashboard状态
-      if (categoryTitle) categoryTitle.textContent = 'Dashboard';
-      if (categoryDesc) categoryDesc.textContent = '数据统计和网站概览';
-      // Dashboard状态下隐藏搜索栏
-      if (searchBar) {
-        hideElement(searchBar);
-      }
-    } else {
-      // 检查是否是文件夹
-      const folder = this.findFolderInTree(this.currentCategory);
-      if (folder) {
-        // 文件夹状态
-        if (categoryTitle) categoryTitle.textContent = folder.title;
-        if (categoryDesc) {
-          let desc = `${folder.bookmarkCount} 个收藏链接`;
-          if (folder.children && folder.children.length > 0) {
-            desc += ` • ${folder.children.length} 个子文件夹`;
-          }
-          categoryDesc.textContent = desc;
-        }
-      } else {
-        // 旧版分类状态（兼容性）
-        const category = this.categories?.find(cat => cat.id === this.currentCategory);
-        if (category) {
-          if (categoryTitle) categoryTitle.textContent = category.name;
-          if (categoryDesc) categoryDesc.textContent = category.description;
-        } else {
-          // 如果找不到分类和文件夹，显示默认信息
-          if (categoryTitle) categoryTitle.textContent = '未知分类';
-          if (categoryDesc) categoryDesc.textContent = '当前分类信息不可用';
-        }
-      }
-      
-      // 分类/文件夹页面显示搜索栏
-      if (searchBar) {
-        showElement(searchBar);
-      }
-    }
-  }
-
-  // 更新链接数量
-  updateLinkCount(count) {
-    const linkCountEl = document.getElementById('linkCount');
-    if (linkCountEl) {
-      linkCountEl.textContent = count;
-    }
-  }
-
-  // 搜索功能
-  handleSearch(query) {
-    this.searchQuery = query.trim();
-    this.renderLinks();
-    
-    // 显示/隐藏清除按钮
-    const clearBtn = document.getElementById('clearSearch');
-    toggleElement(clearBtn, this.searchQuery ? true : false);
-  }
-
-  // 清除搜索
-  clearSearch() {
-    const searchInput = document.getElementById('searchInput');
-    searchInput.value = '';
-    this.handleSearch('');
-  }
-
-  // Tag筛选处理
-  handleTagFilter(tag) {
-    if (this.selectedTags.has(tag)) {
-      this.selectedTags.delete(tag);
-    } else {
-      this.selectedTags.add(tag);
-    }
-    
-    this.renderLinks();
-  }
-
-  // 清除Tag筛选
-  clearTagFilters() {
-    this.selectedTags.clear();
-    this.renderLinks();
-  }
-
-  // 设置活跃分类（支持取消选择）
-  setActiveCategory(categoryId) {
-    // 清除当前Tag筛选
-    this.selectedTags.clear();
-    
-    // 如果点击的是当前已选中的分类，则取消选择回到Dashboard
-    if (this.currentCategory === categoryId) {
-      this.currentCategory = null;
-      // 取消所有按钮的active状态
-      document.querySelectorAll('.category-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
-    } else {
-      // 选择新的分类
-      this.currentCategory = categoryId;
-      
-      // 更新按钮状态
-      document.querySelectorAll('.category-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
-      
-      const activeBtn = document.querySelector(`[data-category="${categoryId}"]`);
-      if (activeBtn) {
-        activeBtn.classList.add('active');
-      }
-    }
-    
-    // 隐藏Tag筛选区域（只有Dashboard才隐藏）
-    const filterSection = document.getElementById('tagFilterSection');
-    if (this.currentCategory === null) {
-      hideElement(filterSection);
-    }
-    
-    // 更新分类信息
-    this.updateCategoryInfo();
-    
-    // 重新渲染链接
-    this.renderLinks();
-  }
-
-  // 设置活跃文件夹
-  setActiveFolder(folderId) {
-    console.log('🗂️ 切换到文件夹:', folderId);
-    
-    // 清除当前Tag筛选
-    this.selectedTags.clear();
-    
-    // 如果点击的是当前已选中的文件夹，则取消选择回到Dashboard
-    if (this.currentCategory === folderId) {
-      this.currentCategory = null;
-      // 取消所有文件夹的active状态
-      document.querySelectorAll('.tree-item').forEach(item => {
-        item.classList.remove('active');
-      });
-    } else {
-      // 选择新的文件夹
-      this.currentCategory = folderId;
-      
-      // 更新文件夹树的活跃状态
-      document.querySelectorAll('.tree-item').forEach(item => {
-        item.classList.remove('active');
-      });
-      
-      const activeItem = document.querySelector(`[data-folder-id="${folderId}"]`);
-      if (activeItem) {
-        activeItem.classList.add('active');
-      }
-    }
-    
-    // 隐藏Tag筛选区域（只有Dashboard才隐藏）
-    const filterSection = document.getElementById('tagFilterSection');
-    if (this.currentCategory === null) {
-      hideElement(filterSection);
-    }
-    
-    // 更新分类信息
-    this.updateCategoryInfo();
-    
-    // 重新渲染链接
-    this.renderLinks();
-  }
-
-  // 回到Dashboard（取消所有分类选择）
-  goToDashboard() {
-    this.selectedTags.clear();
-    this.currentCategory = null;
-    
-    // 取消所有按钮的active状态
-    document.querySelectorAll('.category-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    
-    // 取消所有文件夹的active状态
-    document.querySelectorAll('.tree-item').forEach(item => {
-      item.classList.remove('active');
-    });
-    
-    // 隐藏Tag筛选区域
-    const filterSection = document.getElementById('tagFilterSection');
-    hideElement(filterSection);
-    
-    // 更新分类信息
-    this.updateCategoryInfo();
-    
-    // 重新渲染链接
-    this.renderLinks();
-  }
-
-  // 显示右键菜单
-  showContextMenu(event, link, card) {
-    // 隐藏已存在的菜单
-    this.hideContextMenu();
-    
-    // 设置当前上下文
-    this.currentBookmarkForContext = link;
-    
-    // 创建菜单
-    const menu = document.createElement('div');
-    menu.className = 'context-menu';
-    menu.innerHTML = `
-      <button class="context-menu-item" data-action="open">
-        <span class="icon">🔗</span>
-        打开链接
-      </button>
-      <button class="context-menu-item" data-action="copy">
-        <span class="icon">📋</span>
-        复制链接
-      </button>
-      <div class="context-menu-separator"></div>
-      <button class="context-menu-item" data-action="move-to-folder">
-        <span class="icon">📁</span>
-        移动到文件夹
-      </button>
-      <div class="context-menu-separator"></div>
-      <button class="context-menu-item danger" data-action="delete">
-        <span class="icon">🗑️</span>
-        从收藏夹中删除
-      </button>
-    `;
-    
-    // 添加到页面
-    document.body.appendChild(menu);
-    this.currentContextMenu = menu;
-    
-    // 设置位置
-    const x = event.clientX;
-    const y = event.clientY;
-    
-    // 确保菜单不超出屏幕边界
-    const menuRect = { width: 160, height: 160 }; // 预估菜单大小（增加了移动选项）
-    const adjustedX = Math.min(x, window.innerWidth - menuRect.width - 10);
-    const adjustedY = Math.min(y, window.innerHeight - menuRect.height - 10);
-    
-    menu.style.left = adjustedX + 'px';
-    menu.style.top = adjustedY + 'px';
-    
-    // 添加卡片激活状态
-    card.classList.add('context-active');
-    
-    // 显示菜单
-    setTimeout(() => {
-      menu.classList.add('show');
-    }, 10);
-    
-    // 绑定菜单事件
-    this.bindContextMenuEvents(menu, link, card);
+    console.log('🌳 文件夹树渲染完成');
   }
   
-  // 绑定右键菜单事件
-  bindContextMenuEvents(menu, link, card) {
-    const handleMenuClick = (e) => {
-      e.stopPropagation();
-      const action = e.target.closest('.context-menu-item')?.dataset.action;
-      
-      switch (action) {
-        case 'open':
-          window.open(link.url, '_blank');
-          break;
-        case 'copy':
-          this.copyToClipboard(link.url);
-          break;
-        case 'move-to-folder':
-          this.showMoveToFolderDialog(link);
-          break;
-        case 'delete':
-          this.showDeleteConfirmation(link, card);
-          break;
-      }
-      
-      this.hideContextMenu();
+  /**
+   * 创建Dashboard节点
+   */
+  createDashboardNode() {
+    const dashboardItem = document.createElement('div');
+    dashboardItem.className = 'tree-item dashboard-item active';
+    dashboardItem.dataset.folderId = 'dashboard';
+    dashboardItem.innerHTML = `
+      <div class="tree-content">
+        <span class="tree-icon">📊</span>
+        <span class="tree-title">Dashboard</span>
+      </div>
+    `;
+    return dashboardItem;
+  }
+  
+  /**
+   * 创建树节点
+   */
+  createTreeNode(node, depth = 0) {
+    const item = document.createElement('div');
+    item.className = 'tree-item';
+    item.dataset.folderId = node.id;
+    item.style.paddingLeft = `${depth * 16 + 12}px`;
+    
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = node.isExpanded || false;
+    
+    item.innerHTML = `
+      <div class="tree-content">
+        ${hasChildren ? `<span class="tree-toggle ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}">▶</span>` : '<span class="tree-spacer"></span>'}
+        <span class="tree-icon">${node.icon}</span>
+        <span class="tree-title">${node.title}</span>
+        <span class="bookmark-count">${node.bookmarkCount || 0}</span>
+      </div>
+      ${hasChildren ? `<div class="tree-children ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}"></div>` : ''}
+    `;
+    
+    // 渲染子节点
+    if (hasChildren && isExpanded) {
+      const childrenContainer = item.querySelector('.tree-children');
+      node.children.forEach(child => {
+        const childNode = this.createTreeNode(child, depth + 1);
+        childrenContainer.appendChild(childNode);
+      });
+    }
+    
+    return item;
+  }
+  
+  // ==================== 工具方法 ====================
+  
+  /**
+   * 获取文件夹图标
+   */
+  getFolderIcon(folderTitle, depth) {
+    if (!folderTitle) return '📁';
+    
+    const titleLower = folderTitle.toLowerCase();
+    const iconMap = {
+      '工作': '💼', 'work': '💼',
+      '学习': '📚', 'study': '📚', 'education': '📚',
+      '娱乐': '🎮', 'entertainment': '🎮', 'games': '🎮',
+      '社交': '💬', 'social': '💬', 'communication': '💬',
+      '购物': '🛒', 'shopping': '🛒',
+      '新闻': '📰', 'news': '📰',
+      '技术': '⚙️', 'tech': '⚙️', 'technology': '⚙️',
+      '设计': '🎨', 'design': '🎨'
     };
     
-    menu.addEventListener('click', handleMenuClick);
-  }
-  
-  // 隐藏右键菜单
-  hideContextMenu() {
-    if (this.currentContextMenu) {
-      this.currentContextMenu.classList.remove('show');
-      setTimeout(() => {
-        if (this.currentContextMenu && this.currentContextMenu.parentNode) {
-          this.currentContextMenu.parentNode.removeChild(this.currentContextMenu);
-        }
-        this.currentContextMenu = null;
-      }, 150);
+    for (const [keyword, icon] of Object.entries(iconMap)) {
+      if (titleLower.includes(keyword)) {
+        return icon;
+      }
     }
     
-    // 移除所有卡片的激活状态
-    document.querySelectorAll('.link-card.context-active').forEach(card => {
-      card.classList.remove('context-active');
-    });
-    
-    this.currentBookmarkForContext = null;
+    return '📁';
   }
   
-  // 复制到剪贴板
-  async copyToClipboard(text) {
+  /**
+   * 生成Favicon URL
+   */
+  generateFaviconUrl(url) {
     try {
-      await navigator.clipboard.writeText(text);
-      this.showNotification('链接已复制到剪贴板 🐱', 'success');
-    } catch (error) {
-      console.warn('❌ 复制失败，使用备用方法:', error);
+      const domain = new URL(url).hostname;
+      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+    } catch (e) {
+      return '';
+    }
+  }
+  
+  /**
+   * 从标题提取标签
+   */
+  extractTagsFromTitle(title) {
+    // 简单的标签提取逻辑，可以后续完善
+    return [];
+  }
+  
+  /**
+   * 监听收藏夹更新
+   */
+  setupBookmarkListeners() {
+    console.log('📡 设置收藏夹更新监听器...');
+    
+    if (typeof chrome !== 'undefined' && chrome.bookmarks) {
+      // 监听收藏夹变化
+      chrome.bookmarks.onCreated.addListener(() => this.handleBookmarkUpdate('created'));
+      chrome.bookmarks.onRemoved.addListener(() => this.handleBookmarkUpdate('removed'));
+      chrome.bookmarks.onChanged.addListener(() => this.handleBookmarkUpdate('changed'));
+      chrome.bookmarks.onMoved.addListener(() => this.handleBookmarkUpdate('moved'));
       
-      // 备用方法
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.opacity = '0';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
+      console.log('✅ 收藏夹监听器设置完成');
+    } else {
+      console.warn('⚠️ Chrome书签API不可用，跳过监听器设置');
+    }
+  }
+  
+  /**
+   * 处理收藏夹更新
+   */
+  async handleBookmarkUpdate(action) {
+    console.log('📊 收藏夹数据更新:', action);
+    
+    try {
+      // 重新加载数据
+      await this.loadBookmarksData();
+      this.generateFolderTreeFromBookmarks();
+      this.generateAllLinks();
       
-      try {
-        document.execCommand('copy');
-        this.showNotification('链接已复制到剪贴板 🐱', 'success');
-      } catch (err) {
-        this.showNotification('复制失败 😿', 'error');
+      // 重新渲染文件夹树
+      this.renderFolderTree();
+      
+      // 通知当前Tab数据更新
+      if (this.currentTab) {
+        this.currentTab.onDataUpdate(action, {
+          allLinks: this.allLinks,
+          folderTree: this.folderTree
+        });
       }
       
-      document.body.removeChild(textArea);
+    } catch (error) {
+      console.error('❌ 处理收藏夹更新失败:', error);
     }
   }
   
-  // 显示移动到文件夹对话框
-  showMoveToFolderDialog(link) {
-    console.log('📁 创建移动到文件夹对话框...');
+  // ==================== 状态管理 ====================
+  
+  /**
+   * 显示加载状态
+   */
+  showLoadingState() {
+    const emptyState = this.emptyState;
+    const linksGrid = this.linksGrid;
     
-    // 创建对话框覆盖层
-    const overlay = document.createElement('div');
-    overlay.className = 'move-folder-overlay';
-    
-    // 确保样式正确应用
-    overlay.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      background: rgba(0,0,0,0.5);
-      z-index: 10000;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      margin: 0 !important;
-      padding: 20px;
-      box-sizing: border-box;
-    `;
-    
-    // 获取所有文件夹的列表
-    const allFolders = this.getAllFoldersFlat();
-    
-    // 构建文件夹选项HTML
-    const folderOptionsHtml = allFolders.map(folder => {
-      const isCurrentFolder = folder.id === link.parentId;
-      const indentStyle = `padding-left: ${folder.depth * 20 + 20}px;`;
-      
-      return `
-        <div class="folder-option ${isCurrentFolder ? 'current-folder' : ''}" 
-             data-folder-id="${folder.id}" 
-             style="${indentStyle}"
-             ${isCurrentFolder ? 'disabled' : ''}>
-          <span class="folder-icon">${folder.icon}</span>
-          <span class="folder-name">${folder.title}</span>
-          ${isCurrentFolder ? '<span class="current-indicator">(当前位置)</span>' : ''}
+    if (emptyState && linksGrid) {
+      linksGrid.style.display = 'none';
+      emptyState.style.display = 'flex';
+      emptyState.innerHTML = `
+        <div class="loading-state">
+          <div class="loading-icon">🐱</div>
+          <div class="loading-text">正在初始化Tab系统...</div>
         </div>
       `;
-    }).join('');
-    
-    overlay.innerHTML = `
-      <div class="move-folder-dialog">
-        <h3 class="move-folder-title">移动到文件夹</h3>
-        <div class="move-folder-message">
-          选择要移动 <strong>"${link.title}"</strong> 到的文件夹：
-        </div>
-        <div class="folder-list-container">
-          <div class="folder-list">
-            ${folderOptionsHtml}
-          </div>
-        </div>
-        <div class="move-folder-actions">
-          <button class="move-folder-btn cancel">取消</button>
-          <button class="move-folder-btn confirm" disabled>移动</button>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(overlay);
-    console.log('✅ 移动文件夹对话框已添加到页面');
-    
-    // 显示对话框
-    setTimeout(() => {
-      overlay.classList.add('show');
-      console.log('✅ 移动文件夹对话框显示动画开始');
-    }, 10);
-    
-    // 绑定事件
-    this.bindMoveToFolderEvents(overlay, link);
-  }
-  
-  // 获取所有文件夹的扁平列表
-  getAllFoldersFlat() {
-    const allFolders = [];
-    
-    // 递归遍历文件夹树
-    const traverseTree = (nodes, depth = 0) => {
-      nodes.forEach(node => {
-        allFolders.push({
-          id: node.id,
-          title: node.title,
-          icon: node.icon,
-          depth: depth
-        });
-        
-        if (node.children && node.children.length > 0) {
-          traverseTree(node.children, depth + 1);
-        }
-      });
-    };
-    
-    // 从文件夹树开始遍历，跳过"全部书签"这个虚拟节点
-    const realFolders = this.folderTree.filter(folder => !folder.isSpecial);
-    traverseTree(realFolders, 0);
-    
-    return allFolders;
-  }
-  
-  // 绑定移动到文件夹对话框的事件
-  bindMoveToFolderEvents(overlay, link) {
-    const confirmBtn = overlay.querySelector('.move-folder-btn.confirm');
-    const cancelBtn = overlay.querySelector('.move-folder-btn.cancel');
-    const folderOptions = overlay.querySelectorAll('.folder-option');
-    
-    let selectedFolderId = null;
-    
-    // 文件夹选择事件
-    folderOptions.forEach(option => {
-      if (!option.hasAttribute('disabled')) {
-        option.addEventListener('click', () => {
-          // 清除之前的选中状态
-          folderOptions.forEach(opt => opt.classList.remove('selected'));
-          
-          // 设置新的选中状态
-          option.classList.add('selected');
-          selectedFolderId = option.dataset.folderId;
-          
-          // 启用确认按钮
-          confirmBtn.disabled = false;
-        });
-      }
-    });
-    
-    // 取消按钮事件
-    cancelBtn.addEventListener('click', () => {
-      this.closeMoveToFolderDialog(overlay);
-    });
-    
-    // 确认按钮事件
-    confirmBtn.addEventListener('click', async () => {
-      if (selectedFolderId) {
-        try {
-          confirmBtn.disabled = true;
-          confirmBtn.textContent = '移动中...';
-          
-          await this.moveBookmarkToFolder(link, selectedFolderId);
-          this.closeMoveToFolderDialog(overlay);
-          
-        } catch (error) {
-          console.error('❌ 移动收藏夹失败:', error);
-          this.showNotification('移动收藏夹失败 😿', 'error');
-          confirmBtn.disabled = false;
-          confirmBtn.textContent = '移动';
-        }
-      }
-    });
-    
-    // 点击覆盖层关闭对话框
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        this.closeMoveToFolderDialog(overlay);
-      }
-    });
-    
-    // ESC键关闭对话框
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        this.closeMoveToFolderDialog(overlay);
-        document.removeEventListener('keydown', handleKeyDown);
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-  }
-  
-  // 关闭移动到文件夹对话框
-  closeMoveToFolderDialog(overlay) {
-    overlay.classList.remove('show');
-    setTimeout(() => {
-      if (overlay && overlay.parentNode) {
-        overlay.parentNode.removeChild(overlay);
-      }
-    }, 300);
-  }
-  
-  // 移动收藏夹到指定文件夹
-  async moveBookmarkToFolder(link, targetFolderId) {
-    try {
-      console.log(`📁 移动收藏夹 ${link.id} 到文件夹 ${targetFolderId}`);
-      
-      // 发送移动请求到后台脚本
-      let response = await this.sendMessageToBackground({
-        action: 'moveBookmark',
-        bookmarkId: link.id,
-        targetFolderId: targetFolderId
-      });
-      
-      console.log('📨 收到后台脚本响应:', response);
-      
-      // 如果后台脚本通信失败，尝试直接调用Chrome API
-      if (!response.success && response.error && (response.error.includes('message port closed') || response.error.includes('No response from background script'))) {
-        console.log('🔄 后台脚本通信失败，尝试直接调用Chrome API...');
-        try {
-          await chrome.bookmarks.move(link.id, { parentId: targetFolderId });
-          response = { success: true, directCall: true };
-          console.log('✅ 直接调用Chrome API成功');
-        } catch (directError) {
-          console.error('❌ 直接调用Chrome API也失败:', directError);
-          response = { success: false, error: `后台脚本和直接调用都失败: ${directError.message}` };
-        }
-      }
-      
-      if (response.success) {
-        console.log('✅ 收藏夹移动成功');
-        this.showNotification('收藏夹已移动 🐱', 'success', 1200);
-        
-        // 如果当前分类是"全部"或者是dashboard，则不需要移除卡片
-        if (this.currentCategory === 'all' || this.currentCategory === null) {
-          // 更新卡片的分类信息
-          const card = document.querySelector(`.link-card[data-bookmark-id="${link.id}"]`);
-          if (card) {
-            // 获取目标文件夹信息
-            const targetFolder = await this.bookmarkManager.getFolder(targetFolderId);
-            if (targetFolder) {
-              // 更新卡片中的分类标签
-              const categoryBadge = card.querySelector('.category-badge');
-              if (categoryBadge) {
-                const folderIcon = this.getFolderIcon(targetFolder.title, 0);
-                categoryBadge.innerHTML = `
-                  <span class="category-badge-icon">${folderIcon}</span>
-                  <span class="category-badge-name">${targetFolder.title}</span>
-                `;
-              }
-              
-              // 更新内存中的链接数据
-              const linkIndex = this.allLinks.findIndex(item => item.id === link.id);
-              if (linkIndex !== -1) {
-                this.allLinks[linkIndex].categoryId = targetFolderId;
-                this.allLinks[linkIndex].categoryName = targetFolder.title;
-                this.allLinks[linkIndex].categoryIcon = folderIcon;
-              }
-            }
-          }
-        } else {
-          // 如果是在特定文件夹视图，则移除卡片
-          const card = document.querySelector(`.link-card[data-bookmark-id="${link.id}"]`);
-          if (card) {
-            // 添加移除动画
-            card.style.transition = 'all 0.3s ease';
-            card.style.opacity = '0';
-            card.style.transform = 'scale(0.8)';
-            
-            // 从DOM中移除卡片
-            setTimeout(() => {
-              if (card && card.parentNode) {
-                card.parentNode.removeChild(card);
-              }
-              
-              // 更新链接计数
-              const currentCount = document.querySelectorAll('.link-card').length;
-              this.updateLinkCount(currentCount);
-              
-              // 如果当前没有链接了，显示空状态
-              if (currentCount === 0) {
-                const emptyState = document.getElementById('emptyState');
-                if (emptyState) {
-                  emptyState.classList.remove('hidden');
-                }
-              }
-            }, 300);
-          }
-          
-          // 更新内存中的数据
-          this.allLinks = this.allLinks.filter(item => item.id !== link.id);
-        }
-      } else {
-        throw new Error(response.error || '移动失败');
-      }
-    } catch (error) {
-      console.error('❌ 移动收藏夹失败:', error);
-      this.showNotification(`移动失败: ${error.message} 😿`, 'error');
-      throw error;
-    }
-  }
-
-  // 显示删除确认对话框
-  showDeleteConfirmation(link, card) {
-    console.log('🔍 创建删除确认对话框...');
-    
-    // 创建确认对话框
-    const overlay = document.createElement('div');
-    overlay.className = 'delete-confirm-overlay';
-    
-    // 确保样式正确应用
-    overlay.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      background: rgba(0,0,0,0.5);
-      z-index: 10000;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      margin: 0 !important;
-      padding: 20px;
-      box-sizing: border-box;
-    `;
-    
-    overlay.innerHTML = `
-      <div class="delete-confirm-dialog">
-        <h3 class="delete-confirm-title">确认删除收藏</h3>
-        <div class="delete-confirm-message">
-          你确定要从收藏夹中删除 <strong>"${link.title}"</strong> 吗？<br>
-          此操作无法撤销。
-        </div>
-        <div class="delete-confirm-actions">
-          <button class="delete-confirm-btn cancel">取消</button>
-          <button class="delete-confirm-btn confirm">删除</button>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(overlay);
-    console.log('✅ 对话框已添加到页面');
-    
-    // 显示对话框
-    setTimeout(() => {
-      overlay.classList.add('show');
-      console.log('✅ 对话框显示动画开始');
-    }, 10);
-    
-    // 绑定按钮事件
-    const cancelBtn = overlay.querySelector('.cancel');
-    const confirmBtn = overlay.querySelector('.confirm');
-    
-    const closeDialog = () => {
-      overlay.classList.remove('show');
-      setTimeout(() => {
-        if (overlay.parentNode) {
-          overlay.parentNode.removeChild(overlay);
-        }
-      }, 300);
-    };
-    
-    cancelBtn.addEventListener('click', closeDialog);
-    confirmBtn.addEventListener('click', () => {
-      this.deleteBookmark(link, card);
-      closeDialog();
-    });
-    
-    // 点击背景关闭
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) {
-        closeDialog();
-      }
-    });
-  }
-  
-  // 删除收藏夹
-  async deleteBookmark(link, card) {
-    console.log('🔍 开始删除收藏夹流程:', {
-      linkId: link.id,
-      linkTitle: link.title,
-      linkUrl: link.url
-    });
-    
-    if (!link.id) {
-      console.error('❌ 缺少收藏夹ID');
-      this.showNotification('无法删除：缺少收藏夹ID 😿', 'error');
-      return;
-    }
-    
-    try {
-      // 先给卡片添加删除动画
-      card.style.transition = 'all 0.3s ease';
-      card.style.opacity = '0';
-      card.style.transform = 'scale(0.8)';
-      
-      console.log('📡 发送删除请求到后台脚本...');
-      
-      // 调用后台API删除收藏夹
-      let response = await this.sendMessageToBackground({
-        action: 'deleteBookmark',
-        bookmarkId: link.id
-      });
-      
-      console.log('📨 收到后台脚本响应:', response);
-      
-      // 如果后台脚本通信失败，尝试直接调用Chrome API
-      if (!response.success && response.error && (response.error.includes('message port closed') || response.error.includes('No response from background script'))) {
-        console.log('🔄 后台脚本通信失败，尝试直接调用Chrome API...');
-        try {
-          await chrome.bookmarks.remove(link.id);
-          response = { success: true, directCall: true };
-          console.log('✅ 直接调用Chrome API成功');
-        } catch (directError) {
-          console.error('❌ 直接调用Chrome API也失败:', directError);
-          response = { success: false, error: `后台脚本和直接调用都失败: ${directError.message}` };
-        }
-      }
-      
-      if (response.success) {
-        // 删除成功，显示通知并动态更新UI
-        console.log('✅ 删除成功，更新UI');
-        
-        this.showNotification(`"${link.title}" 已删除 🐱`, 'success', 1200);
-        
-        // 从DOM中移除卡片
-        setTimeout(() => {
-          if (card && card.parentNode) {
-            card.parentNode.removeChild(card);
-          }
-          
-          // 更新本地数据
-          if (this.allLinks && this.allLinks.length > 0) {
-            this.allLinks = this.allLinks.filter(item => item.id !== link.id);
-          }
-          
-          // 更新链接计数
-          const currentCount = document.querySelectorAll('.link-card').length;
-          this.updateLinkCount(currentCount);
-          
-          // 如果当前没有链接了，显示空状态
-          if (currentCount === 0) {
-            const emptyState = document.getElementById('emptyState');
-            if (emptyState) {
-              emptyState.classList.remove('hidden');
-            }
-          }
-        }, 300);
-      } else {
-        throw new Error(response.error || '删除失败');
-      }
-    } catch (error) {
-      console.error('❌ 删除收藏夹失败:', error);
-      
-      // 删除失败，恢复卡片显示
-      card.style.opacity = '1';
-      card.style.transform = 'scale(1)';
-      
-      this.showNotification(`删除失败: ${error.message} 😿`, 'error');
     }
   }
   
-  // 发送消息到后台脚本
-  async sendMessageToBackground(message) {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
-        resolve({ success: false, error: 'Chrome runtime not available' });
-        return;
-      }
-
-      // 设置超时机制
-      const timeout = setTimeout(() => {
-        resolve({ success: false, error: 'Request timeout' });
-      }, 10000); // 10秒超时
-
-      try {
-        chrome.runtime.sendMessage(message, (response) => {
-          clearTimeout(timeout);
-          
-          if (chrome.runtime.lastError) {
-            console.warn('❌ Chrome runtime error:', chrome.runtime.lastError.message);
-            // 特别处理消息端口关闭的错误
-            if (chrome.runtime.lastError.message.includes('message port closed')) {
-              resolve({ success: false, error: 'The message port closed before a response was received.' });
-            } else {
-              resolve({ success: false, error: chrome.runtime.lastError.message });
-            }
-          } else if (!response) {
-            console.warn('❌ No response from background script');
-            resolve({ success: false, error: 'No response from background script' });
-          } else {
-            resolve(response);
-          }
-        });
-      } catch (error) {
-        clearTimeout(timeout);
-        console.error('❌ Error sending message:', error);
-        resolve({ success: false, error: error.message });
-      }
-    });
+  /**
+   * 隐藏加载状态
+   */
+  hideLoadingState() {
+    this.isLoading = false;
+    const emptyState = this.emptyState;
+    
+    if (emptyState) {
+      emptyState.style.display = 'none';
+    }
   }
   
-  // 显示通知
+  /**
+   * 显示错误状态
+   */
+  showErrorState(error) {
+    const emptyState = this.emptyState;
+    const linksGrid = this.linksGrid;
+    
+    if (emptyState && linksGrid) {
+      linksGrid.style.display = 'none';
+      emptyState.style.display = 'flex';
+      emptyState.innerHTML = `
+        <div class="error-state">
+          <div class="error-icon">😿</div>
+          <div class="error-text">Tab系统初始化失败</div>
+          <div class="error-detail">${error.message}</div>
+          <button class="retry-btn" onclick="location.reload()">重试</button>
+        </div>
+      `;
+    }
+  }
+  
+  /**
+   * 显示通知
+   */
   showNotification(message, type = 'info', duration = 3000) {
     // 创建通知元素
     const notification = document.createElement('div');
@@ -1840,226 +809,25 @@ class ToolboxApp {
     // 添加到页面
     document.body.appendChild(notification);
     
-    // 显示动画
-    setTimeout(() => {
-      notification.classList.add('slide-out');
-    }, duration);
-    
-    // 移除通知
+    // 自动移除
     setTimeout(() => {
       if (notification.parentNode) {
         notification.parentNode.removeChild(notification);
       }
-    }, duration + 500);
-  }
-
-  // 测试扩展连接（调试用）
-  async testExtensionConnection() {
-    console.log('🔧 测试扩展连接...');
-    
-    try {
-      const response = await this.sendMessageToBackground({
-        action: 'getBookmarksCache'
-      });
-      
-      if (response.success) {
-        console.log('✅ 扩展连接正常');
-        this.showNotification('扩展连接测试成功 🐱', 'success');
-        return true;
-      } else {
-        console.error('❌ 扩展连接失败:', response.error);
-        this.showNotification('扩展连接测试失败：' + response.error + ' 😿', 'error');
-        return false;
-      }
-    } catch (error) {
-      console.error('❌ 测试连接时出错:', error);
-      this.showNotification('扩展连接测试出错：' + error.message + ' 😿', 'error');
-      return false;
-    }
-  }
-
-  // 设置Tag横向滚动功能
-  setupTagScrolling() {
-    const tagScrollContainer = document.querySelector('.tag-scroll-container');
-    if (!tagScrollContainer) return;
-
-    // 鼠标滚轮横向滚动支持
-    tagScrollContainer.addEventListener('wheel', (e) => {
-      // 只有在Tag筛选区域内才启用横向滚动
-      e.preventDefault();
-      
-      // 横向滚动
-      const scrollAmount = e.deltaY * 0.8; // 调整滚动灵敏度
-      tagScrollContainer.scrollLeft += scrollAmount;
-    }, { passive: false });
-
-    // 触摸滑动支持（移动端）
-    let isDown = false;
-    let startX;
-    let scrollLeft;
-
-    tagScrollContainer.addEventListener('mousedown', (e) => {
-      isDown = true;
-      tagScrollContainer.style.cursor = 'grabbing';
-      startX = e.pageX - tagScrollContainer.offsetLeft;
-      scrollLeft = tagScrollContainer.scrollLeft;
-    });
-
-    tagScrollContainer.addEventListener('mouseleave', () => {
-      isDown = false;
-      tagScrollContainer.style.cursor = 'grab';
-    });
-
-    tagScrollContainer.addEventListener('mouseup', () => {
-      isDown = false;
-      tagScrollContainer.style.cursor = 'grab';
-    });
-
-    tagScrollContainer.addEventListener('mousemove', (e) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - tagScrollContainer.offsetLeft;
-      const walk = (x - startX) * 1.5; // 调整拖拽灵敏度
-      tagScrollContainer.scrollLeft = scrollLeft - walk;
-    });
-
-    // 设置初始光标样式
-    tagScrollContainer.style.cursor = 'grab';
-  }
-
-  // 绑定事件
-  bindEvents() {
-    // 文件夹树和其他点击事件
-    document.addEventListener('click', (e) => {
-      // 如果点击的不是右键菜单相关元素，隐藏右键菜单
-      if (!e.target.closest('.context-menu') && !e.target.closest('.link-card')) {
-        this.hideContextMenu();
-      }
-      
-      // 文件夹展开/折叠
-      if (e.target.closest('.tree-expand')) {
-        e.stopPropagation(); // 防止触发文件夹选择
-        const folderId = e.target.closest('.tree-expand').dataset.folderId;
-        this.toggleFolder(folderId);
-      }
-      // 文件夹选择
-      else if (e.target.closest('.tree-item')) {
-        const folderId = e.target.closest('.tree-item').dataset.folderId;
-        this.setActiveFolder(folderId);
-      }
-      
-      // 旧的分类按钮（兼容性）
-      if (e.target.closest('.category-btn')) {
-        const categoryId = e.target.closest('.category-btn').dataset.category;
-        this.setActiveCategory(categoryId);
-      }
-      
-      // 点击logo回到Dashboard
-      if (e.target.closest('.logo')) {
-        this.goToDashboard();
-      }
-      
-      // Tag筛选按钮
-      if (e.target.closest('.tag-filter-btn')) {
-        const tag = e.target.closest('.tag-filter-btn').dataset.tag;
-        this.handleTagFilter(tag);
-      }
-      
-      // 清除Tag筛选按钮
-      if (e.target.closest('.clear-tags-btn') || e.target.closest('#clearTagsBtn')) {
-        this.clearTagFilters();
-      }
-    });
-
-    // 搜索功能
-    const searchInput = document.getElementById('searchInput');
-    const clearBtn = document.getElementById('clearSearch');
-    
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        this.handleSearch(e.target.value);
-      });
-    }
-    
-    if (clearBtn) {
-      clearBtn.addEventListener('click', () => {
-        this.clearSearch();
-      });
-    }
-
-    // Tag横向滚动支持
-    this.setupTagScrolling();
-
-    // 键盘快捷键
-    document.addEventListener('keydown', (e) => {
-      // Ctrl/Cmd + K 聚焦搜索框
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        if (searchInput) {
-          searchInput.focus();
-        }
-      }
-      
-      // ESC 清除搜索和Tag筛选
-      if (e.key === 'Escape') {
-        if (this.searchQuery) {
-          this.clearSearch();
-        } else if (this.selectedTags.size > 0) {
-          this.clearTagFilters();
-        }
-      }
-    });
-  }
-  
-  // 测试移动功能（调试用）
-  async testMoveFunction() {
-    console.log('🧪 测试移动功能...');
-    
-    // 检查是否有 Chrome Bookmarks API
-    if (typeof chrome === 'undefined' || !chrome.bookmarks) {
-      console.error('❌ Chrome Bookmarks API 不可用');
-      this.showNotification('Chrome Bookmarks API 不可用 😿', 'error');
-      return false;
-    }
-    
-    try {
-      // 测试获取书签树
-      const tree = await chrome.bookmarks.getTree();
-      console.log('✅ Chrome Bookmarks API 可用，树结构:', tree);
-      
-      // 检查是否有至少一个书签和文件夹
-      const flatBookmarks = this.bookmarkManager.cache?.flatBookmarks || [];
-      const folderTree = this.folderTree || [];
-      
-      if (flatBookmarks.length === 0) {
-        this.showNotification('没有找到收藏夹项目 😿', 'warning');
-        return false;
-      }
-      
-      if (folderTree.length <= 1) {
-        this.showNotification('需要至少两个文件夹才能测试移动功能 😿', 'warning');
-        return false;
-      }
-      
-      this.showNotification('移动功能测试通过！可以正常使用 🐱', 'success');
-      return true;
-      
-    } catch (error) {
-      console.error('❌ 测试移动功能失败:', error);
-      this.showNotification('移动功能测试失败：' + error.message + ' 😿', 'error');
-      return false;
-    }
+    }, duration);
   }
 }
 
-// 应用初始化
-document.addEventListener('DOMContentLoaded', () => {
-  const app = new ToolboxApp();
-  
-  // 将应用实例暴露到全局，方便调试
-  window.linkBoardApp = app;
-  console.log('🐱 LinkBoard应用已加载，可通过 window.linkBoardApp 访问');
-  console.log('💡 调试提示：');
-  console.log('   - 使用 window.linkBoardApp.testExtensionConnection() 测试扩展连接');
-  console.log('   - 使用 window.linkBoardApp.testMoveFunction() 测试移动功能');
-}); 
+// ==================== 应用启动 ====================
+
+// 等待DOM加载完成后启动应用
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.linkBoardApp = new ToolboxApp();
+  });
+} else {
+  window.linkBoardApp = new ToolboxApp();
+}
+
+// 导出到全局作用域以便其他脚本使用
+window.ToolboxApp = ToolboxApp; 
