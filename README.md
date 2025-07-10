@@ -1,6 +1,6 @@
-# FavoriteBoard Plugin
+# FavoriteBoard
 
-![FavoriteBoard Plugin 截图](assets/images/image.png)
+![FavoriteBoard 截图](assets/images/image.png)
 
 > ⚠️ 当前版本仅适配 Microsoft Edge 浏览器，暂不支持 Chrome、Firefox 等其他浏览器。
 
@@ -25,7 +25,7 @@
 ## 📁 项目结构
 
 ```
-FavoriteBoardPlugin/
+FavoriteBoard/
 ├── manifest.json          # 扩展配置文件
 ├── background.js          # 后台服务脚本（Service Worker）
 ├── index.html             # 主界面页面
