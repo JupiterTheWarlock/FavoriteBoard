@@ -87,20 +87,12 @@ class DashboardTab extends BaseTab {
           bookmarkStats = {};
         }
       }
-      
-      // // 计算文件夹统计
-      // const folderStats = this.calculateFolderStats(folderTree);
-      
-      // // 计算域名和标签统计
-      // const domainStats = this.calculateDomainStats(allLinks);
-      
       // 最近活动统计
       const recentActivity = this.calculateRecentActivity(allLinks);
       
       this.statsData = {
         totalLinks,
         totalFolders,
-        totalDomains: domainStats.count,
         recentActivity,
         bookmarkStats,
         lastUpdated: new Date()
@@ -114,9 +106,6 @@ class DashboardTab extends BaseTab {
       this.statsData = {
         totalLinks: 0,
         totalFolders: 0,
-        totalDomains: 0,
-        folderStats: [],
-        domainStats: { count: 0, list: [] },
         recentActivity: [],
         bookmarkStats: {},
         lastUpdated: new Date(),
@@ -164,34 +153,7 @@ class DashboardTab extends BaseTab {
               <span class="stat-label">文件夹数量</span>
             </div>
           </div>
-          
-          <div class="stat-item domains">
-            <div class="stat-icon">🌐</div>
-            <div class="stat-content">
-              <span class="stat-number">${stats.totalDomains}</span>
-              <span class="stat-label">不同域名</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 文件夹统计 -->
-      <div class="folder-stats-section">
-        <h4>📂 文件夹分布</h4>
-        <div class="folder-stats">
-          ${this.renderFolderStats(stats.folderStats)}
-        </div>
-      </div>
-      
-      <!-- 热门域名和标签 -->
-      <div class="dashboard-charts">
-        <div class="chart-section">
-          <h4>🌐 热门域名</h4>
-          <div class="domain-list">
-            ${this.renderTopDomains(stats.domainStats.list)}
-          </div>
-        </div>
-      
+
       <!-- 最近活动 -->
       <div class="recent-activity-section">
         <h4>⏰ 最近活动</h4>
@@ -205,45 +167,6 @@ class DashboardTab extends BaseTab {
     
     // 确保容器可见
     showElement(container, 'block');
-  }
-  
-  /**
-   * 渲染文件夹统计
-   * @param {Array} folderStats - 文件夹统计数据
-   * @returns {string}
-   */
-  renderFolderStats(folderStats) {
-    if (!folderStats || folderStats.length === 0) {
-      return '<div class="empty-stats">暂无文件夹数据</div>';
-    }
-    
-    return folderStats.slice(0, 10).map(folder => `
-      <div class="folder-stat-item" data-folder-id="${folder.id}">
-        <div class="folder-stat-header">
-          <span class="folder-icon">${folder.icon}</span>
-          <span class="folder-name">${folder.title}</span>
-        </div>
-        <div class="folder-stat-count">${folder.bookmarkCount}</div>
-      </div>
-    `).join('');
-  }
-  
-  /**
-   * 渲染热门域名
-   * @param {Array} domains - 域名统计数据
-   * @returns {string}
-   */
-  renderTopDomains(domains) {
-    if (!domains || domains.length === 0) {
-      return '<div class="empty-stats">暂无域名数据</div>';
-    }
-    
-    return domains.slice(0, 8).map(domain => `
-      <div class="domain-item">
-        <div class="domain-name">${domain.name}</div>
-        <div class="domain-count">${domain.count}</div>
-      </div>
-    `).join('');
   }
   
   /**
@@ -290,63 +213,6 @@ class DashboardTab extends BaseTab {
     
     countRecursive(folderTree);
     return count;
-  }
-  
-  /**
-   * 计算文件夹统计
-   * @param {Array} folderTree - 文件夹树
-   * @returns {Array}
-   */
-  calculateFolderStats(folderTree) {
-    const stats = [];
-    
-    const processFolder = (folder, depth = 0) => {
-      if (folder.bookmarkCount > 0) {
-        stats.push({
-          id: folder.id,
-          title: folder.title,
-          bookmarkCount: folder.bookmarkCount,
-          depth: depth,
-          icon: this.getFolderIcon(folder.title, depth)
-        });
-      }
-      
-      if (folder.children) {
-        folder.children.forEach(child => processFolder(child, depth + 1));
-      }
-    };
-    
-    if (folderTree && Array.isArray(folderTree)) {
-      folderTree.forEach(folder => processFolder(folder));
-    }
-    
-    // 按收藏数量排序
-    return stats.sort((a, b) => b.bookmarkCount - a.bookmarkCount);
-  }
-  
-  /**
-   * 计算域名统计
-   * @param {Array} allLinks - 所有链接
-   * @returns {Object}
-   */
-  calculateDomainStats(allLinks) {
-    const domainMap = new Map();
-    
-    allLinks.forEach(link => {
-      if (link.domain) {
-        const count = domainMap.get(link.domain) || 0;
-        domainMap.set(link.domain, count + 1);
-      }
-    });
-    
-    const domainList = Array.from(domainMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-    
-    return {
-      count: domainMap.size,
-      list: domainList
-    };
   }
   
   /**
