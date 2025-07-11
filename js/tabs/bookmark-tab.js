@@ -83,28 +83,27 @@ class BookmarkTab extends BaseTab {
    */
   async loadBookmarkData(app) {
     try {
-      console.log(`🔍 开始加载文件夹数据: ${this.folderId}`);
-      console.log(`📊 总链接数: ${(app.allLinks || []).length}`);
-      
       // 根据文件夹ID获取链接数据
       if (this.folderId === 'all') {
         // 显示所有书签
         this.currentLinks = [...(app.allLinks || [])];
-        console.log(`📖 显示所有书签: ${this.currentLinks.length} 个`);
       } else if (this.folderId) {
         // 显示特定文件夹的书签
         this.currentLinks = this.getLinksForFolder(app, this.folderId);
-        console.log(`📁 显示文件夹 ${this.folderId} 的书签: ${this.currentLinks.length} 个`);
       } else {
         // 默认显示所有书签
         this.currentLinks = [...(app.allLinks || [])];
-        console.log(`📖 默认显示所有书签: ${this.currentLinks.length} 个`);
       }
+      
+      // 按时间倒序排序：最新添加的链接排在前面
+      this.currentLinks.sort((a, b) => {
+        const aTime = parseInt(a.dateAdded) || 0;
+        const bTime = parseInt(b.dateAdded) || 0;
+        return bTime - aTime; // 倒序：时间戳大的(新的)在前
+      });
       
       // 初始化筛选结果
       this.filteredLinks = [...this.currentLinks];
-      
-      console.log(`📚 最终加载了 ${this.currentLinks.length} 个链接`);
       
     } catch (error) {
       console.error('❌ 加载收藏夹数据失败:', error);
@@ -122,27 +121,9 @@ class BookmarkTab extends BaseTab {
   getLinksForFolder(app, folderId) {
     const allLinks = app.allLinks || [];
     
-    console.log(`🔍 查找文件夹 ${folderId} 的链接 (类型: ${typeof folderId})`);
-    console.log(`📊 总链接数: ${allLinks.length}`);
-    
     // 获取文件夹及其子文件夹的ID
     const folderIds = app.getFolderAndSubfolderIds ? 
       app.getFolderAndSubfolderIds(folderId) : [folderId];
-    
-    console.log(`📁 目标文件夹IDs: [${folderIds.join(', ')}]`);
-    console.log(`📁 folderIds类型:`, folderIds.map(id => `${id}(${typeof id})`));
-    
-    // 显示所有链接的parentId用于调试（如果链接少于20个）
-    if (allLinks.length > 0) {
-      console.log('📄 所有链接的parentId和folderId:');
-      const maxShow = Math.min(allLinks.length, 20);
-      allLinks.slice(0, maxShow).forEach((link, index) => {
-        console.log(`  ${index + 1}. "${link.title}" - parentId: "${link.parentId}"(${typeof link.parentId}), folderId: "${link.folderId}"(${typeof link.folderId})`);
-      });
-      if (allLinks.length > maxShow) {
-        console.log(`  ... 还有 ${allLinks.length - maxShow} 个链接`);
-      }
-    }
     
     // 筛选属于这些文件夹的链接 - 确保类型一致性
     const matchedLinks = allLinks.filter(link => {
@@ -150,14 +131,8 @@ class BookmarkTab extends BaseTab {
       const folderMatch = folderIds.some(fid => String(fid) === String(link.folderId));
       const isMatch = parentMatch || folderMatch;
       
-      if (isMatch) {
-        console.log(`  ✅ 匹配: "${link.title}" - parentId: ${link.parentId}, folderId: ${link.folderId}`);
-      }
-      
       return isMatch;
     });
-    
-    console.log(`✅ 找到 ${matchedLinks.length} 个匹配的链接`);
     
     return matchedLinks;
   }

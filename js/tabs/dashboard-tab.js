@@ -153,10 +153,16 @@ class DashboardTab extends BaseTab {
               <span class="stat-label">文件夹数量</span>
             </div>
           </div>
+        </div>
+      </div>
 
-      <!-- 最近活动 -->
-      <div class="recent-activity-section">
-        <h4>⏰ 最近活动</h4>
+      <!-- 最近活动区域 -->
+      <div class="dashboard-stats">
+        <div class="stats-header">
+          <h3>⏰ 最近活动</h3>
+          <p>您的最新收藏记录</p>
+        </div>
+        
         <div class="recent-activity">
           ${this.renderRecentActivity(stats.recentActivity)}
         </div>
@@ -221,11 +227,31 @@ class DashboardTab extends BaseTab {
    * @returns {Array}
    */
   calculateRecentActivity(allLinks) {
-    // 按添加时间排序，获取最近的活动
-    const recentLinks = allLinks
-      .filter(link => link.dateAdded)
-      .sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0))
+    
+    // 过滤有dateAdded的链接
+    const validLinks = allLinks.filter(link => link.dateAdded);
+    
+    // 按添加时间倒序排序，最新添加的排在最前面
+    const recentLinks = validLinks
+      .sort((a, b) => {
+        const aTime = parseInt(a.dateAdded) || 0;
+        const bTime = parseInt(b.dateAdded) || 0;
+        const result = bTime - aTime; // 倒序：时间戳大的(新的)在前
+        
+        return result;
+      })
       .slice(0, 5);
+    
+    recentLinks.forEach((link, index) => {
+      const time = parseInt(link.dateAdded);
+      const date = new Date(time);
+    });
+    
+    // 验证排序是否正确
+    if (recentLinks.length >= 2) {
+      const first = parseInt(recentLinks[0].dateAdded);
+      const second = parseInt(recentLinks[1].dateAdded);
+    }
     
     return recentLinks.map(link => ({
       icon: '🔗',
