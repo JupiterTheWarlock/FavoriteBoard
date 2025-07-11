@@ -39,7 +39,7 @@ class BookmarkTab extends BaseTab {
    */
   getDescription() {
     if (this.folderId === 'all') {
-      return `全部书签 • ${this.currentLinks.length} 个链接`;
+      return `全部收藏• ${this.currentLinks.length} 个链接`;
     } else if (this.folderData) {
       return `${this.folderData.title} • ${this.currentLinks.length} 个链接`;
     }

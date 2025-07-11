@@ -282,49 +282,70 @@ function notifyTabsOfUpdate(action, data) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.action);
   
-  switch (message.action) {
-    case 'getBookmarksCache':
-      handleGetBookmarksCache(sendResponse);
-      return true;
-      
-    case 'getFavicon':
-      handleGetFavicon(message.url, sendResponse);
-      return true;
-      
-    case 'refreshCache':
-      handleRefreshCache(sendResponse);
-      return true;
-      
-    case 'deleteBookmark':
-      handleDeleteBookmark(message.bookmarkId, sendResponse);
-      return true;
-      
-    case 'moveBookmark':
-      handleMoveBookmark(message.bookmarkId, message.targetFolderId, sendResponse);
-      return true;
-      
-    default:
-      console.warn('⚠️ Unknown message action:', message.action);
-  }
+  // 创建一个异步处理器
+  const handleAsync = async () => {
+    switch (message.action) {
+      case 'getBookmarksCache':
+        return await handleGetBookmarksCache();
+        
+      case 'getFavicon':
+        return await handleGetFavicon(message.url);
+        
+      case 'refreshCache':
+        return await handleRefreshCache();
+        
+      case 'deleteBookmark':
+        return await handleDeleteBookmark(message.bookmarkId);
+        
+      case 'moveBookmark':
+        return await handleMoveBookmark(message.bookmarkId, message.targetFolderId);
+        
+      case 'createFolder':
+        return await handleCreateFolder(message.parentId, message.title);
+        
+      case 'renameFolder':
+        return await handleRenameFolder(message.folderId, message.title);
+        
+      case 'deleteFolder':
+        return await handleDeleteFolder(message.folderId);
+        
+      default:
+        console.warn('⚠️ Unknown message action:', message.action);
+        return { success: false, error: 'Unknown action' };
+    }
+  };
+  
+  // 执行异步处理器并发送响应
+  handleAsync()
+    .then(response => {
+      sendResponse(response);
+    })
+    .catch(error => {
+      console.error('❌ Error handling message:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+  
+  // 返回true保持消息端口开放
+  return true;
 });
 
 // 获取收藏夹缓存
-async function handleGetBookmarksCache(sendResponse) {
+async function handleGetBookmarksCache() {
   try {
     const result = await chrome.storage.local.get(['bookmarksCache', 'lastBookmarkSync']);
-    sendResponse({
+    return {
       success: true,
       data: result.bookmarksCache,
       lastSync: result.lastBookmarkSync
-    });
+    };
   } catch (error) {
     console.error('❌ Error getting bookmarks cache:', error);
-    sendResponse({ success: false, error: error.message });
+    return { success: false, error: error.message };
   }
 }
 
 // 获取网站图标
-async function handleGetFavicon(url, sendResponse) {
+async function handleGetFavicon(url) {
   try {
     const domain = new URL(url).hostname;
     const cacheKey = `favicon_${domain}`;
@@ -332,8 +353,7 @@ async function handleGetFavicon(url, sendResponse) {
     // 检查缓存
     const cached = await chrome.storage.local.get([cacheKey]);
     if (cached[cacheKey]) {
-      sendResponse({ success: true, favicon: cached[cacheKey] });
-      return;
+      return { success: true, favicon: cached[cacheKey] };
     }
     
     // 首先尝试使用扩展内部的 favicon API
@@ -344,8 +364,7 @@ async function handleGetFavicon(url, sendResponse) {
       const response = await fetch(extensionFaviconUrl);
       if (response.ok) {
         await chrome.storage.local.set({ [cacheKey]: extensionFaviconUrl });
-        sendResponse({ success: true, favicon: extensionFaviconUrl });
-        return;
+        return { success: true, favicon: extensionFaviconUrl };
       }
     } catch (e) {
       console.warn('⚠️ Extension favicon not available, falling back to Google service');
@@ -356,11 +375,10 @@ async function handleGetFavicon(url, sendResponse) {
     
     try {
       await chrome.storage.local.set({ [cacheKey]: googleFaviconUrl });
-      
-      sendResponse({ success: true, favicon: googleFaviconUrl });
+      return { success: true, favicon: googleFaviconUrl };
     } catch (error) {
       console.error('❌ Error getting favicon:', error);
-      sendResponse({ 
+      return { 
         success: false, 
         error: error.message,
         fallback: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
@@ -369,11 +387,11 @@ async function handleGetFavicon(url, sendResponse) {
             <text x="16" y="20" text-anchor="middle" fill="white" font-size="16">🔗</text>
           </svg>
         `)
-      });
+      };
     }
   } catch (error) {
     console.error('❌ Error in handleGetFavicon:', error);
-    sendResponse({ 
+    return { 
       success: false, 
       error: error.message,
       fallback: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`
@@ -382,23 +400,23 @@ async function handleGetFavicon(url, sendResponse) {
           <text x="16" y="20" text-anchor="middle" fill="white" font-size="16">🔗</text>
         </svg>
       `)
-    });
+    };
   }
 }
 
 // 刷新缓存
-async function handleRefreshCache(sendResponse) {
+async function handleRefreshCache() {
   try {
     await refreshBookmarksCache();
-    sendResponse({ success: true });
+    return { success: true };
   } catch (error) {
     console.error('❌ Error refreshing cache:', error);
-    sendResponse({ success: false, error: error.message });
+    return { success: false, error: error.message };
   }
 }
 
 // 删除收藏夹
-async function handleDeleteBookmark(bookmarkId, sendResponse) {
+async function handleDeleteBookmark(bookmarkId) {
   try {
     console.log('🗑️ Deleting bookmark:', bookmarkId);
     
@@ -417,21 +435,21 @@ async function handleDeleteBookmark(bookmarkId, sendResponse) {
     await chrome.bookmarks.remove(bookmarkId);
     
     console.log('✅ Bookmark deleted successfully:', bookmarkId);
-    sendResponse({ success: true, bookmarkId: bookmarkId });
+    return { success: true, bookmarkId: bookmarkId };
     
     // 刷新缓存将由事件监听器自动处理
   } catch (error) {
     console.error('❌ Error deleting bookmark:', error);
-    sendResponse({ 
+    return { 
       success: false, 
       error: error.message,
       bookmarkId: bookmarkId
-    });
+    };
   }
 }
 
 // 处理移动收藏夹
-async function handleMoveBookmark(bookmarkId, targetFolderId, sendResponse) {
+async function handleMoveBookmark(bookmarkId, targetFolderId) {
   try {
     console.log('📁 Moving bookmark:', bookmarkId, 'to folder:', targetFolderId);
     
@@ -450,16 +468,144 @@ async function handleMoveBookmark(bookmarkId, targetFolderId, sendResponse) {
     await chrome.bookmarks.move(bookmarkId, { parentId: targetFolderId });
     
     console.log('✅ Bookmark moved successfully:', bookmarkId);
-    sendResponse({ success: true, bookmarkId: bookmarkId });
+    return { success: true, bookmarkId: bookmarkId };
     
     // 刷新缓存将由事件监听器自动处理
   } catch (error) {
     console.error('❌ Error moving bookmark:', error);
-    sendResponse({ 
+    return { 
       success: false, 
       error: error.message,
       bookmarkId: bookmarkId
+    };
+  }
+}
+
+// 处理创建文件夹
+async function handleCreateFolder(parentId, title) {
+  try {
+    console.log('📁 Creating folder:', title, 'in parent:', parentId);
+    
+    if (!parentId || !title) {
+      throw new Error('Parent ID and folder title are required');
+    }
+    
+    // 验证父文件夹是否存在
+    try {
+      const [parentFolder] = await chrome.bookmarks.get(parentId);
+      // 文件夹没有url属性，书签有url属性
+      if (parentFolder.url) {
+        throw new Error('Parent is not a folder (it is a bookmark)');
+      }
+    } catch (getError) {
+      if (getError.message.includes('Parent is not a folder')) {
+        throw getError;
+      }
+      throw new Error('Parent folder not found');
+    }
+    
+    // 调用Chrome书签API创建文件夹
+    const folder = await chrome.bookmarks.create({
+      parentId: parentId,
+      title: title.trim()
     });
+    
+    console.log('✅ Folder created successfully:', folder);
+    return { success: true, folder: folder };
+    
+    // 刷新缓存将由事件监听器自动处理
+  } catch (error) {
+    console.error('❌ Error creating folder:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      parentId: parentId,
+      title: title
+    };
+  }
+}
+
+// 处理重命名文件夹
+async function handleRenameFolder(folderId, title) {
+  try {
+    console.log('✏️ Renaming folder:', folderId, 'to:', title);
+    
+    if (!folderId || !title) {
+      throw new Error('Folder ID and new title are required');
+    }
+    
+    // 验证文件夹是否存在
+    try {
+      const [folder] = await chrome.bookmarks.get(folderId);
+      // 文件夹没有url属性，书签有url属性
+      if (folder.url) {
+        throw new Error('Target is not a folder (it is a bookmark)');
+      }
+    } catch (getError) {
+      if (getError.message.includes('Target is not a folder')) {
+        throw getError;
+      }
+      throw new Error('Folder not found');
+    }
+    
+    // 调用Chrome书签API更新文件夹
+    const updatedFolder = await chrome.bookmarks.update(folderId, {
+      title: title.trim()
+    });
+    
+    console.log('✅ Folder renamed successfully:', updatedFolder);
+    return { success: true, folder: updatedFolder };
+    
+    // 刷新缓存将由事件监听器自动处理
+  } catch (error) {
+    console.error('❌ Error renaming folder:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      folderId: folderId,
+      title: title
+    };
+  }
+}
+
+// 处理删除文件夹
+async function handleDeleteFolder(folderId) {
+  try {
+    console.log('🗑️ Deleting folder:', folderId);
+    
+    if (!folderId) {
+      throw new Error('Folder ID is required');
+    }
+    
+    // 验证文件夹是否存在
+    try {
+      const [folder] = await chrome.bookmarks.get(folderId);
+      // 文件夹没有url属性，书签有url属性
+      if (folder.url) {
+        throw new Error('Target is not a folder (it is a bookmark)');
+      }
+    } catch (getError) {
+      if (getError.message.includes('Target is not a folder')) {
+        throw getError;
+      }
+      throw new Error('Folder not found');
+    }
+    
+    // 调用Chrome书签API删除文件夹
+    // 注意：removeTree会递归删除文件夹及其所有内容
+    await chrome.bookmarks.removeTree(folderId);
+    
+    console.log('✅ Folder deleted successfully:', folderId);
+    return { success: true, folderId: folderId };
+    
+    // 刷新缓存将由事件监听器自动处理
+  } catch (error) {
+    console.error('❌ Error deleting folder:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      folderId: folderId
+    };
   }
 }
 
