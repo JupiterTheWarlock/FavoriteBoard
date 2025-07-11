@@ -229,15 +229,13 @@ class BookmarkTab extends BaseTab {
     const iconUrl = this.getSafeIcon(link.iconUrl, link.url);
     
     card.innerHTML = `
-      <div class="link-icon">
-        <img src="${iconUrl}" alt="icon" loading="lazy" onerror="this.src='${this.getDefaultIcon()}'">
-      </div>
-      <div class="link-content">
-        <div class="link-title" title="${this.escapeHtml(link.title)}">${this.escapeHtml(link.title)}</div>
-        <div class="link-url" title="${this.escapeHtml(link.url)}">${this.escapeHtml(this.getDomainFromUrl(link.url))}</div>
-      </div>
-      <div class="link-actions">
+      <div class="card-header">
+        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" onerror="this.src='${this.getDefaultIcon()}'">
+        <h3 class="card-title" title="${this.escapeHtml(link.title)}">${this.escapeHtml(link.title)}</h3>
         <button class="context-menu-btn" title="更多选项">⋮</button>
+      </div>
+      <div class="card-description">
+        <span class="link-url" title="${this.escapeHtml(link.url)}">${this.escapeHtml(this.getDomainFromUrl(link.url))}</span>
       </div>
     `;
     
@@ -310,6 +308,25 @@ class BookmarkTab extends BaseTab {
     }
   }
   
+  /**
+   * 应用筛选条件
+   */
+  applyFilters() {
+    if (!this.searchQuery) {
+      // 没有搜索条件，显示所有链接
+      this.filteredLinks = [...this.currentLinks];
+    } else {
+      // 根据搜索条件筛选链接
+      this.filteredLinks = this.currentLinks.filter(link => {
+        return link.title.toLowerCase().includes(this.searchQuery) ||
+               link.url.toLowerCase().includes(this.searchQuery) ||
+               this.getDomainFromUrl(link.url).toLowerCase().includes(this.searchQuery);
+      });
+    }
+    
+    console.log(`🔍 筛选结果: ${this.filteredLinks.length}/${this.currentLinks.length} 个链接`);
+  }
+  
   // ==================== 右键菜单相关方法 ====================
   
   /**
@@ -326,33 +343,32 @@ class BookmarkTab extends BaseTab {
     
     // 创建菜单
     const menu = document.createElement('div');
-    menu.className = 'context-menu';
+    menu.className = 'context-menu show';
     menu.innerHTML = `
       <div class="context-menu-item" data-action="open">
-        <span class="menu-icon">🔗</span>
+        <span class="icon">🔗</span>
         <span class="menu-text">打开链接</span>
       </div>
       <div class="context-menu-item" data-action="openNewTab">
-        <span class="menu-icon">📄</span>
+        <span class="icon">📄</span>
         <span class="menu-text">新标签页打开</span>
       </div>
       <div class="context-menu-item" data-action="copy">
-        <span class="menu-icon">📋</span>
+        <span class="icon">📋</span>
         <span class="menu-text">复制链接</span>
       </div>
-      <div class="context-menu-divider"></div>
+      <div class="context-menu-separator"></div>
       <div class="context-menu-item" data-action="move">
-        <span class="menu-icon">📁</span>
+        <span class="icon">📁</span>
         <span class="menu-text">移动到文件夹</span>
       </div>
-      <div class="context-menu-item" data-action="delete">
-        <span class="menu-icon">🗑️</span>
+      <div class="context-menu-item danger" data-action="delete">
+        <span class="icon">🗑️</span>
         <span class="menu-text">删除书签</span>
       </div>
     `;
     
     // 定位菜单
-    const rect = card.getBoundingClientRect();
     menu.style.position = 'fixed';
     menu.style.left = Math.min(event.clientX, window.innerWidth - 200) + 'px';
     menu.style.top = Math.min(event.clientY, window.innerHeight - 200) + 'px';
@@ -363,6 +379,8 @@ class BookmarkTab extends BaseTab {
     
     // 绑定菜单事件
     this.bindContextMenuEvents(menu, link, card);
+    
+    console.log('🐱 显示右键菜单');
   }
   
   /**
