@@ -126,9 +126,10 @@ class ToolboxApp {
    */
   registerDefaultTabs() {
     console.log('📋 注册默认Tab...');
+    console.log(`📊 当前链接总数: ${this.allLinks.length}`);
     
     // 注册Dashboard Tab
-    this.registerTab('dashboard', null);
+    this.registerTab('dashboard', 'default');
     
     // 注册全部书签Tab
     this.registerTab('bookmark', 'all', { 
@@ -364,6 +365,7 @@ class ToolboxApp {
       if (!treeItem) return;
       
       const folderId = treeItem.dataset.folderId;
+      console.log(`🖱️ 点击文件夹: ${folderId}`);
       
       if (folderId === 'dashboard') {
         // 切换到Dashboard
@@ -371,6 +373,9 @@ class ToolboxApp {
       } else if (folderId) {
         // 切换到收藏夹Tab
         const folderData = this.folderMap.get(folderId);
+        console.log(`📁 文件夹数据:`, folderData);
+        console.log(`🗂️ 文件夹映射表大小: ${this.folderMap.size}`);
+        console.log(`📊 所有链接数量: ${this.allLinks.length}`);
         this.switchToTab('bookmark', folderId, folderData);
       }
     });
@@ -511,7 +516,15 @@ class ToolboxApp {
    * 生成所有链接数据
    */
   generateAllLinks() {
-    const allBookmarks = this.bookmarkManager.cache?.allBookmarks || [];
+    const allBookmarks = this.bookmarkManager.cache?.flatBookmarks || [];
+    
+    console.log('📚 原始书签数据:', allBookmarks.length, '个');
+    if (allBookmarks.length > 0) {
+      console.log('📄 前几个原始书签:');
+      allBookmarks.slice(0, 3).forEach((bookmark, index) => {
+        console.log(`  ${index + 1}. "${bookmark.title}" - parentId: "${bookmark.parentId}"(${typeof bookmark.parentId})`);
+      });
+    }
     
     this.allLinks = allBookmarks.map(bookmark => ({
       id: bookmark.id,
@@ -526,6 +539,12 @@ class ToolboxApp {
     }));
     
     console.log('🔗 生成了所有链接数据，共', this.allLinks.length, '个链接');
+    if (this.allLinks.length > 0) {
+      console.log('🔗 前几个生成的链接:');
+      this.allLinks.slice(0, 3).forEach((link, index) => {
+        console.log(`  ${index + 1}. "${link.title}" - parentId: "${link.parentId}"(${typeof link.parentId}), folderId: "${link.folderId}"(${typeof link.folderId})`);
+      });
+    }
   }
   
   /**

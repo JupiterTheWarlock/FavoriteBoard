@@ -116,6 +116,8 @@ class TabFactory {
   createBookmarkTab(folderId, folderData) {
     const config = this.tabTypes.get('bookmark');
     
+    console.log(`🏭 创建收藏夹Tab请求: folderId=${folderId}, folderData=`, folderData);
+    
     // 检查是否已存在该文件夹的Tab
     if (config.instances.has(folderId)) {
       console.log(`🐱 返回现有收藏夹Tab实例: ${folderId}`);
@@ -133,7 +135,8 @@ class TabFactory {
     // 缓存实例
     config.instances.set(folderId, tab);
     
-    console.log(`🐱 创建收藏夹Tab: ${folderId} - ${folderData.title}`);
+    const title = folderData?.title || folderId;
+    console.log(`🐱 创建收藏夹Tab: ${folderId} - ${title}`);
     return tab;
   }
   

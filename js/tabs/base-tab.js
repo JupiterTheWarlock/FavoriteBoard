@@ -348,16 +348,17 @@ class BaseTab {
    * 创建空状态提示
    * @param {string} message - 提示信息
    * @param {string} icon - 图标
-   * @returns {string} HTML字符串
+   * @returns {HTMLElement} DOM元素
    */
   createEmptyState(message, icon = '📭') {
-    return `
-      <div class="empty-state">
-        <div class="empty-icon">${icon}</div>
-        <h3>${message}</h3>
-        <p>暂无相关内容</p>
-      </div>
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+    emptyState.innerHTML = `
+      <div class="empty-icon">${icon}</div>
+      <h3>${message}</h3>
+      <p>暂无相关内容</p>
     `;
+    return emptyState;
   }
   
   /**
