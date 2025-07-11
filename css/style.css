@@ -207,7 +207,6 @@ body {
   align-items: center;
   min-height: 40px;
   padding: 0.5rem 0.75rem;
-  margin-left: var(--tree-indent, 0);
   border-radius: var(--radius);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -230,19 +229,26 @@ body {
   background-color: #2980b9;
 }
 
-/* 树形缩进 */
-.tree-item[data-depth="0"] { --tree-indent: 0; }
-.tree-item[data-depth="1"] { --tree-indent: 1.2rem; }
-.tree-item[data-depth="2"] { --tree-indent: 2.4rem; }
-.tree-item[data-depth="3"] { --tree-indent: 3.6rem; }
-.tree-item[data-depth="4"] { --tree-indent: 4.8rem; }
-.tree-item[data-depth="5"] { --tree-indent: 6rem; }
+/* 树节点内容容器 */
+.tree-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* 树形缩进 - 使用data-depth属性来设置缩进 */
+.tree-item[data-depth="0"] { padding-left: 12px !important; }
+.tree-item[data-depth="1"] { padding-left: 32px !important; }
+.tree-item[data-depth="2"] { padding-left: 52px !important; }
+.tree-item[data-depth="3"] { padding-left: 72px !important; }
+.tree-item[data-depth="4"] { padding-left: 92px !important; }
+.tree-item[data-depth="5"] { padding-left: 112px !important; }
 
 /* 展开/折叠箭头 */
-.tree-expand {
+.tree-toggle {
   width: 20px;
   height: 20px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   margin-right: 0.5rem;
@@ -253,21 +259,23 @@ body {
   flex-shrink: 0;
 }
 
-.tree-expand:hover {
+.tree-toggle:hover {
   background-color: rgba(0,0,0,0.1);
 }
 
-.tree-item.active .tree-expand:hover {
+.tree-item.active .tree-toggle:hover {
   background-color: rgba(255,255,255,0.2);
 }
 
-.tree-expand.expanded {
+.tree-toggle.expanded {
   transform: rotate(90deg);
 }
 
-.tree-expand.leaf {
-  opacity: 0;
-  pointer-events: none;
+.tree-spacer {
+  width: 20px;
+  height: 20px;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
 }
 
 /* 文件夹图标 */
@@ -278,14 +286,14 @@ body {
 }
 
 /* 文件夹名称 */
-.tree-name {
+.tree-title {
   flex: 1;
   font-weight: 500;
   font-size: 0.9rem;
 }
 
 /* 文件夹书签计数 */
-.tree-count {
+.bookmark-count {
   background: rgba(0,0,0,0.1);
   color: inherit;
   padding: 0.2rem 0.4rem;
@@ -296,61 +304,17 @@ body {
   flex-shrink: 0;
 }
 
-.tree-item.active .tree-count {
+.tree-item.active .bookmark-count {
   background: rgba(255,255,255,0.2);
 }
 
-/* 连接线 */
-.tree-item::before {
-  content: '';
-  position: absolute;
-  left: calc(var(--tree-indent, 0) + 10px);
-  top: 0;
-  bottom: 50%;
-  width: 1px;
-  background-color: var(--border-color);
-  opacity: 0.3;
-}
-
-.tree-item[data-depth="0"]::before {
-  display: none;
-}
-
-.tree-item.last-child::before {
-  bottom: 50%;
-}
-
-/* 水平连接线 */
+/* 连接线 - 暂时隐藏，保持简洁的视觉效果 */
+.tree-item::before,
 .tree-item::after {
-  content: '';
-  position: absolute;
-  left: calc(var(--tree-indent, 0) + 10px);
-  top: 50%;
-  width: 10px;
-  height: 1px;
-  background-color: var(--border-color);
-  opacity: 0.3;
-}
-
-.tree-item[data-depth="0"]::after {
   display: none;
 }
 
-/* 子节点容器 */
-.tree-children {
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.tree-children.collapsed {
-  max-height: 0;
-  opacity: 0;
-}
-
-.tree-children.expanded {
-  max-height: 1000px;
-  opacity: 1;
-}
+/* 子节点通过缩进显示层级关系 */
 
 /* 特殊节点样式 */
 .tree-item.root-folder {

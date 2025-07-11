@@ -326,6 +326,9 @@ class ToolboxApp {
     // 文件夹树点击事件
     this.bindFolderTreeEvents();
     
+    // 文件夹树展开/折叠事件
+    this.bindTreeToggleEvents();
+    
     // 窗口大小变化事件
     this.bindWindowEvents();
     
@@ -361,6 +364,11 @@ class ToolboxApp {
     if (!folderTree) return;
     
     folderTree.addEventListener('click', (e) => {
+      // 如果点击的是展开/折叠按钮，则不处理文件夹点击
+      if (e.target.closest('.tree-toggle')) {
+        return;
+      }
+      
       const treeItem = e.target.closest('.tree-item');
       if (!treeItem) return;
       
@@ -609,11 +617,108 @@ class ToolboxApp {
     
     // 渲染文件夹树
     this.folderTree.forEach(node => {
-      const treeNode = this.createTreeNode(node);
-      folderTreeContainer.appendChild(treeNode);
+      this.renderTreeNode(node, folderTreeContainer, 0);
     });
     
     console.log('🌳 文件夹树渲染完成');
+  }
+  
+  /**
+   * 递归渲染树节点
+   * @param {Object} node - 节点数据
+   * @param {HTMLElement} container - 容器元素
+   * @param {number} depth - 层级深度
+   */
+  renderTreeNode(node, container, depth = 0) {
+    // 创建节点元素
+    const nodeElement = this.createTreeNodeElement(node, depth);
+    container.appendChild(nodeElement);
+    
+    // 如果有子节点且展开状态，递归渲染子节点
+    if (node.children && node.children.length > 0 && node.isExpanded) {
+      node.children.forEach(child => {
+        this.renderTreeNode(child, container, depth + 1);
+      });
+    }
+  }
+  
+  /**
+   * 创建树节点元素
+   * @param {Object} node - 节点数据
+   * @param {number} depth - 层级深度
+   * @returns {HTMLElement} 节点元素
+   */
+  createTreeNodeElement(node, depth = 0) {
+    const item = document.createElement('div');
+    item.className = 'tree-item';
+    item.dataset.folderId = node.id;
+    item.dataset.depth = depth;
+    item.style.paddingLeft = `${depth * 20 + 12}px`;
+    
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = node.isExpanded || false;
+    
+    item.innerHTML = `
+      <div class="tree-content">
+        ${hasChildren ? 
+          `<span class="tree-toggle ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}">▶</span>` : 
+          '<span class="tree-spacer" style="width: 20px; display: inline-block;"></span>'
+        }
+        <span class="tree-icon">${node.icon}</span>
+        <span class="tree-title">${node.title}</span>
+        <span class="bookmark-count">${node.bookmarkCount || 0}</span>
+      </div>
+    `;
+    
+    return item;
+  }
+  
+  /**
+   * 绑定树节点展开/折叠事件 - 只初始化时调用一次
+   */
+  bindTreeToggleEvents() {
+    const folderTree = document.getElementById('folderTree');
+    if (!folderTree) return;
+    
+    // 使用事件委托，只绑定一次
+    folderTree.addEventListener('click', (e) => {
+      const toggle = e.target.closest('.tree-toggle');
+      if (!toggle) return;
+      
+      e.stopPropagation(); // 阻止冒泡到父节点点击事件
+      e.preventDefault(); // 阻止默认行为
+      
+      const folderId = toggle.dataset.folderId;
+      this.toggleTreeNode(folderId);
+    });
+    
+    console.log('🔗 树节点展开/折叠事件绑定完成');
+  }
+  
+  /**
+   * 切换树节点展开/折叠状态
+   * @param {string} folderId - 文件夹ID
+   */
+  toggleTreeNode(folderId) {
+    const folder = this.folderMap.get(folderId);
+    if (!folder || !folder.children || folder.children.length === 0) return;
+    
+    // 保存当前的Tab选中状态
+    const currentTabType = this.currentTab?.type;
+    const currentInstanceId = this.currentTab?.instanceId;
+    
+    // 切换展开状态
+    folder.isExpanded = !folder.isExpanded;
+    
+    // 重新渲染文件夹树（但不重新绑定事件）
+    this.renderFolderTree();
+    
+    // 恢复Tab选中状态
+    if (currentTabType && currentInstanceId) {
+      this.updateFolderTreeSelection(currentTabType, currentInstanceId);
+    }
+    
+    console.log(`🔄 切换文件夹展开状态: ${folder.title} -> ${folder.isExpanded ? '展开' : '折叠'}`);
   }
   
   /**
@@ -621,7 +726,7 @@ class ToolboxApp {
    */
   createDashboardNode() {
     const dashboardItem = document.createElement('div');
-    dashboardItem.className = 'tree-item dashboard-item active';
+    dashboardItem.className = 'tree-item dashboard-item';
     dashboardItem.dataset.folderId = 'dashboard';
     dashboardItem.innerHTML = `
       <div class="tree-content">
@@ -632,39 +737,7 @@ class ToolboxApp {
     return dashboardItem;
   }
   
-  /**
-   * 创建树节点
-   */
-  createTreeNode(node, depth = 0) {
-    const item = document.createElement('div');
-    item.className = 'tree-item';
-    item.dataset.folderId = node.id;
-    item.style.paddingLeft = `${depth * 16 + 12}px`;
-    
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = node.isExpanded || false;
-    
-    item.innerHTML = `
-      <div class="tree-content">
-        ${hasChildren ? `<span class="tree-toggle ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}">▶</span>` : '<span class="tree-spacer"></span>'}
-        <span class="tree-icon">${node.icon}</span>
-        <span class="tree-title">${node.title}</span>
-        <span class="bookmark-count">${node.bookmarkCount || 0}</span>
-      </div>
-      ${hasChildren ? `<div class="tree-children ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}"></div>` : ''}
-    `;
-    
-    // 渲染子节点
-    if (hasChildren && isExpanded) {
-      const childrenContainer = item.querySelector('.tree-children');
-      node.children.forEach(child => {
-        const childNode = this.createTreeNode(child, depth + 1);
-        childrenContainer.appendChild(childNode);
-      });
-    }
-    
-    return item;
-  }
+
   
   // ==================== 工具方法 ====================
   
