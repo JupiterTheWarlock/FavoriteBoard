@@ -172,125 +172,8 @@ class BookmarkManager {
       // 搜索域名
       if (bookmark.domain && bookmark.domain.toLowerCase().includes(searchQuery)) return true;
       
-      // 搜索标签
-      if (bookmark.tags && bookmark.tags.some(tag => tag.toLowerCase().includes(searchQuery))) return true;
-      
       return false;
     });
-  }
-  
-  // 根据标签筛选收藏夹
-  filterByTags(tags, bookmarks = null) {
-    if (!tags || tags.length === 0) return bookmarks || this.getAllBookmarks();
-    
-    const targetBookmarks = bookmarks || this.getAllBookmarks();
-    
-    return targetBookmarks.filter(bookmark => {
-      if (!bookmark.tags || bookmark.tags.length === 0) return false;
-      
-      // 检查是否包含所有选中的标签
-      return tags.every(tag => bookmark.tags.includes(tag));
-    });
-  }
-  
-  // 获取所有唯一标签
-  getAllTags() {
-    if (!this.cache) return [];
-    
-    const tagsSet = new Set();
-    
-    this.cache.flatBookmarks.forEach(bookmark => {
-      if (bookmark.tags) {
-        // 过滤掉不需要的标签
-        const filteredTags = bookmark.tags.filter(tag => {
-          // 过滤掉以常见域名后缀结尾的标签
-          const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
-          return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
-        });
-        filteredTags.forEach(tag => tagsSet.add(tag));
-      }
-    });
-    
-    return Array.from(tagsSet).sort();
-  }
-  
-  // 获取文件夹内的标签
-  getTagsInFolder(folderId) {
-    const bookmarks = this.getBookmarksInFolder(folderId);
-    const tagsSet = new Set();
-    
-    bookmarks.forEach(bookmark => {
-      if (bookmark.tags) {
-        // 过滤掉不需要的标签
-        const filteredTags = bookmark.tags.filter(tag => {
-          // 过滤掉以常见域名后缀结尾的标签
-          const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
-          return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
-        });
-        filteredTags.forEach(tag => tagsSet.add(tag));
-      }
-    });
-    
-    return Array.from(tagsSet).sort();
-  }
-  
-  // 生成标签（基于URL域名）
-  generateTags(url) {
-    try {
-      const domain = new URL(url).hostname;
-      const parts = domain.split('.');
-      
-      // 生成标签数组
-      const tags = [];
-      
-      // 如果域名有多个部分，提取有意义的部分作为标签
-      if (parts.length >= 2) {
-        // 跳过主域名，只取子域名或其他有意义的部分
-        const mainDomain = parts.slice(-2).join('.'); // 获取主域名，如 "baidu.com"
-        
-        // 添加子域名作为标签（如果有的话）
-        if (parts.length > 2) {
-          const subdomains = parts.slice(0, -2);
-          // 只添加不是www且长度大于1的子域名，并且不添加以数字开头的子域名
-          tags.push(...subdomains.filter(part => 
-            part !== 'www' && 
-            part.length > 1 && 
-            !/^\d/.test(part) &&
-            !part.includes('.')  // 确保不包含点号
-          ));
-        }
-        
-        // 可以根据特定域名添加分类标签
-        const categoryMap = {
-          'github.com': ['开发', '代码托管'],
-          'stackoverflow.com': ['开发', '问答'],
-          'bilibili.com': ['视频', '娱乐'],
-          'youtube.com': ['视频', '娱乐'],
-          'zhihu.com': ['知识', '问答'],
-          'baidu.com': ['搜索'],
-          'google.com': ['搜索'],
-          'weibo.com': ['社交'],
-          'twitter.com': ['社交'],
-          'facebook.com': ['社交'],
-        };
-        
-        if (categoryMap[mainDomain]) {
-          tags.push(...categoryMap[mainDomain]);
-        }
-      }
-      
-      // 过滤掉空字符串、重复项和域名后缀
-      return [...new Set(tags.filter(tag => {
-        if (!tag || tag.length === 0) return false;
-        
-        // 过滤掉以常见域名后缀结尾的标签
-        const commonSuffixes = ['.com', '.org', '.net', '.edu', '.gov', '.nl', '.cn', '.io'];
-        return !commonSuffixes.some(suffix => tag.toLowerCase().endsWith(suffix));
-      }))];
-    } catch (error) {
-      console.warn('❌ Error generating tags for URL:', url, error);
-      return [];
-    }
   }
   
   // 获取网站图标
@@ -395,7 +278,6 @@ class BookmarkManager {
       return {
         totalBookmarks: 0,
         totalFolders: 0,
-        totalTags: 0,
         lastSync: null
       };
     }
@@ -403,7 +285,6 @@ class BookmarkManager {
     return {
       totalBookmarks: this.cache.totalBookmarks,
       totalFolders: this.cache.totalFolders,
-      totalTags: this.getAllTags().length,
       lastSync: this.lastSync
     };
   }

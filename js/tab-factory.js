@@ -28,7 +28,6 @@ class TabFactory {
       singleton: true,  // 单例模式
       options: {
         showSearch: false,
-        showTagFilter: false,
         supportSearch: false
       }
     });
@@ -42,7 +41,6 @@ class TabFactory {
       singleton: false,  // 可创建多个实例
       options: {
         showSearch: true,
-        showTagFilter: true,
         supportSearch: true
       }
     });
@@ -56,7 +54,6 @@ class TabFactory {
       singleton: true,
       options: {
         showSearch: false,
-        showTagFilter: false,
         supportSearch: false
       }
     });
@@ -160,7 +157,6 @@ class TabFactory {
       // 创建基础设置Tab（临时实现）
       const tab = new window.BaseTab('settings', '设置', '⚙️', {
         showSearch: false,
-        showTagFilter: false,
         supportSearch: false
       });
       

@@ -9,7 +9,6 @@ class DashboardTab extends BaseTab {
   constructor() {
     super('dashboard', 'Dashboard', '📊', {
       showSearch: false,        // Dashboard不显示搜索栏
-      showTagFilter: false,     // Dashboard不显示标签筛选
       supportSearch: false,     // Dashboard不支持搜索
       cache: true              // 缓存Dashboard内容
     });
@@ -89,12 +88,11 @@ class DashboardTab extends BaseTab {
         }
       }
       
-      // 计算文件夹统计
-      const folderStats = this.calculateFolderStats(folderTree);
+      // // 计算文件夹统计
+      // const folderStats = this.calculateFolderStats(folderTree);
       
-      // 计算域名和标签统计
-      const domainStats = this.calculateDomainStats(allLinks);
-      const tagStats = this.calculateTagStats(allLinks);
+      // // 计算域名和标签统计
+      // const domainStats = this.calculateDomainStats(allLinks);
       
       // 最近活动统计
       const recentActivity = this.calculateRecentActivity(allLinks);
@@ -103,10 +101,6 @@ class DashboardTab extends BaseTab {
         totalLinks,
         totalFolders,
         totalDomains: domainStats.count,
-        totalTags: tagStats.count,
-        folderStats,
-        domainStats,
-        tagStats,
         recentActivity,
         bookmarkStats,
         lastUpdated: new Date()
@@ -121,10 +115,8 @@ class DashboardTab extends BaseTab {
         totalLinks: 0,
         totalFolders: 0,
         totalDomains: 0,
-        totalTags: 0,
         folderStats: [],
         domainStats: { count: 0, list: [] },
-        tagStats: { count: 0, list: [] },
         recentActivity: [],
         bookmarkStats: {},
         lastUpdated: new Date(),
@@ -173,14 +165,6 @@ class DashboardTab extends BaseTab {
             </div>
           </div>
           
-          <div class="stat-item tags">
-            <div class="stat-icon">🏷️</div>
-            <div class="stat-content">
-              <span class="stat-number">${stats.totalTags}</span>
-              <span class="stat-label">标签数量</span>
-            </div>
-          </div>
-          
           <div class="stat-item domains">
             <div class="stat-icon">🌐</div>
             <div class="stat-content">
@@ -207,14 +191,6 @@ class DashboardTab extends BaseTab {
             ${this.renderTopDomains(stats.domainStats.list)}
           </div>
         </div>
-        
-        <div class="chart-section">
-          <h4>🏷️ 热门标签</h4>
-          <div class="tag-list">
-            ${this.renderTopTags(stats.tagStats.list)}
-          </div>
-        </div>
-      </div>
       
       <!-- 最近活动 -->
       <div class="recent-activity-section">
@@ -266,24 +242,6 @@ class DashboardTab extends BaseTab {
       <div class="domain-item">
         <div class="domain-name">${domain.name}</div>
         <div class="domain-count">${domain.count}</div>
-      </div>
-    `).join('');
-  }
-  
-  /**
-   * 渲染热门标签
-   * @param {Array} tags - 标签统计数据
-   * @returns {string}
-   */
-  renderTopTags(tags) {
-    if (!tags || tags.length === 0) {
-      return '<div class="empty-stats">暂无标签数据</div>';
-    }
-    
-    return tags.slice(0, 12).map(tag => `
-      <div class="tag-item">
-        <span class="tag-name">${tag.name}</span>
-        <span class="tag-count">${tag.count}</span>
       </div>
     `).join('');
   }
@@ -388,33 +346,6 @@ class DashboardTab extends BaseTab {
     return {
       count: domainMap.size,
       list: domainList
-    };
-  }
-  
-  /**
-   * 计算标签统计
-   * @param {Array} allLinks - 所有链接
-   * @returns {Object}
-   */
-  calculateTagStats(allLinks) {
-    const tagMap = new Map();
-    
-    allLinks.forEach(link => {
-      if (link.tags && Array.isArray(link.tags)) {
-        link.tags.forEach(tag => {
-          const count = tagMap.get(tag) || 0;
-          tagMap.set(tag, count + 1);
-        });
-      }
-    });
-    
-    const tagList = Array.from(tagMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
-    
-    return {
-      count: tagMap.size,
-      list: tagList
     };
   }
   

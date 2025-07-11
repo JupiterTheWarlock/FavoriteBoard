@@ -24,7 +24,6 @@ class BaseTab {
     // 可配置选项
     this.options = {
       showSearch: true,           // 是否显示搜索栏
-      showTagFilter: true,        // 是否显示标签筛选
       supportSearch: true,        // 是否支持搜索功能
       lazyRender: false,         // 是否延迟渲染
       cache: true,               // 是否缓存渲染结果
@@ -163,8 +162,6 @@ class BaseTab {
     switch (feature) {
       case 'search':
         return this.options.supportSearch;
-      case 'tagFilter':
-        return this.options.showTagFilter;
       default:
         return false;
     }

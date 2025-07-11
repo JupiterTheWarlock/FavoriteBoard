@@ -9,7 +9,6 @@ class BookmarkTab extends BaseTab {
   constructor(folderId = null, folderData = null) {
     super('bookmark', '收藏夹', '📁', {
       showSearch: true,         // 显示搜索栏
-      showTagFilter: true,      // 显示标签筛选
       supportSearch: true,      // 支持搜索功能
       cache: false             // 不缓存，因为内容可能经常变化
     });
@@ -20,7 +19,6 @@ class BookmarkTab extends BaseTab {
     this.currentLinks = [];
     this.filteredLinks = [];
     this.searchQuery = '';
-    this.selectedTags = new Set();
     
     // 右键菜单状态
     this.currentContextMenu = null;
@@ -176,62 +174,11 @@ class BookmarkTab extends BaseTab {
     const bookmarkContainer = document.createElement('div');
     bookmarkContainer.className = 'bookmark-tab-container';
     
-    // 渲染标签筛选器
-    const tagFilters = this.renderTagFilters();
-    if (tagFilters) {
-      bookmarkContainer.appendChild(tagFilters);
-    }
-    
     // 渲染链接网格
     const linksGrid = this.renderLinksGrid();
     bookmarkContainer.appendChild(linksGrid);
     
     container.appendChild(bookmarkContainer);
-  }
-  
-  /**
-   * 渲染标签筛选器
-   * @returns {HTMLElement|null}
-   */
-  renderTagFilters() {
-    if (!this.options.showTagFilter) {
-      return null;
-    }
-    
-    const tags = this.getCurrentCategoryTags();
-    if (tags.length === 0) {
-      return null;
-    }
-    
-    const tagFilterContainer = document.createElement('div');
-    tagFilterContainer.className = 'tag-filters';
-    tagFilterContainer.id = 'tagFilters';
-    
-    // 标签筛选标题
-    const tagTitle = document.createElement('div');
-    tagTitle.className = 'tag-filter-title';
-    tagTitle.innerHTML = `
-      <span>🏷️ 标签筛选</span>
-      <button class="clear-tags-btn" style="display: ${this.selectedTags.size > 0 ? 'inline' : 'none'}">
-        清除筛选
-      </button>
-    `;
-    tagFilterContainer.appendChild(tagTitle);
-    
-    // 标签列表
-    const tagList = document.createElement('div');
-    tagList.className = 'tag-list';
-    
-    tags.forEach(tag => {
-      const tagElement = document.createElement('span');
-      tagElement.className = `tag-item ${this.selectedTags.has(tag) ? 'selected' : ''}`;
-      tagElement.textContent = tag;
-      tagElement.dataset.tag = tag;
-      tagList.appendChild(tagElement);
-    });
-    
-    tagFilterContainer.appendChild(tagList);
-    return tagFilterContainer;
   }
   
   /**
@@ -288,11 +235,6 @@ class BookmarkTab extends BaseTab {
       <div class="link-content">
         <div class="link-title" title="${this.escapeHtml(link.title)}">${this.escapeHtml(link.title)}</div>
         <div class="link-url" title="${this.escapeHtml(link.url)}">${this.escapeHtml(this.getDomainFromUrl(link.url))}</div>
-        ${link.tags && link.tags.length > 0 ? `
-          <div class="link-tags">
-            ${link.tags.map(tag => `<span class="link-tag">${this.escapeHtml(tag)}</span>`).join('')}
-          </div>
-        ` : ''}
       </div>
       <div class="link-actions">
         <button class="context-menu-btn" title="更多选项">⋮</button>
@@ -342,25 +284,6 @@ class BookmarkTab extends BaseTab {
    * 绑定收藏夹事件
    */
   bindBookmarkEvents() {
-    // 标签筛选事件
-    const tagList = this.container?.querySelector('.tag-list');
-    if (tagList) {
-      tagList.addEventListener('click', (e) => {
-        if (e.target.classList.contains('tag-item')) {
-          const tag = e.target.dataset.tag;
-          this.handleTagFilter(tag);
-        }
-      });
-    }
-    
-    // 清除标签筛选
-    const clearTagsBtn = this.container?.querySelector('.clear-tags-btn');
-    if (clearTagsBtn) {
-      clearTagsBtn.addEventListener('click', () => {
-        this.clearTagFilters();
-      });
-    }
-    
     // 点击空白处隐藏上下文菜单
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.context-menu')) {
@@ -385,111 +308,6 @@ class BookmarkTab extends BaseTab {
       const newGrid = this.renderLinksGrid();
       gridContainer.replaceWith(newGrid);
     }
-  }
-  
-  /**
-   * 处理标签筛选
-   * @param {string} tag - 标签名
-   */
-  handleTagFilter(tag) {
-    if (this.selectedTags.has(tag)) {
-      this.selectedTags.delete(tag);
-    } else {
-      this.selectedTags.add(tag);
-    }
-    
-    this.applyFilters();
-    this.updateTagFilterUI();
-    
-    // 重新渲染链接网格
-    const gridContainer = this.container?.querySelector('.links-grid-container');
-    if (gridContainer) {
-      const newGrid = this.renderLinksGrid();
-      gridContainer.replaceWith(newGrid);
-    }
-  }
-  
-  /**
-   * 清除标签筛选
-   */
-  clearTagFilters() {
-    this.selectedTags.clear();
-    this.applyFilters();
-    this.updateTagFilterUI();
-    
-    // 重新渲染链接网格
-    const gridContainer = this.container?.querySelector('.links-grid-container');
-    if (gridContainer) {
-      const newGrid = this.renderLinksGrid();
-      gridContainer.replaceWith(newGrid);
-    }
-  }
-  
-  /**
-   * 应用搜索和标签筛选
-   */
-  applyFilters() {
-    let filtered = [...this.currentLinks];
-    
-    // 应用搜索筛选
-    if (this.searchQuery) {
-      filtered = filtered.filter(link => 
-        link.title.toLowerCase().includes(this.searchQuery) ||
-        link.url.toLowerCase().includes(this.searchQuery) ||
-        (link.tags && link.tags.some(tag => 
-          tag.toLowerCase().includes(this.searchQuery)
-        ))
-      );
-    }
-    
-    // 应用标签筛选
-    if (this.selectedTags.size > 0) {
-      filtered = filtered.filter(link => 
-        link.tags && link.tags.some(tag => this.selectedTags.has(tag))
-      );
-    }
-    
-    this.filteredLinks = filtered;
-  }
-  
-  /**
-   * 更新标签筛选UI
-   */
-  updateTagFilterUI() {
-    const tagItems = this.container?.querySelectorAll('.tag-item');
-    tagItems?.forEach(item => {
-      const tag = item.dataset.tag;
-      item.classList.toggle('selected', this.selectedTags.has(tag));
-    });
-    
-    const clearBtn = this.container?.querySelector('.clear-tags-btn');
-    if (clearBtn) {
-      clearBtn.style.display = this.selectedTags.size > 0 ? 'inline' : 'none';
-    }
-  }
-  
-  /**
-   * 获取当前分类的标签
-   * @returns {Array} 标签数组
-   */
-  getCurrentCategoryTags() {
-    const tagCounts = new Map();
-    
-    this.currentLinks.forEach(link => {
-      if (link.tags && Array.isArray(link.tags)) {
-        link.tags.forEach(tag => {
-          if (tag && typeof tag === 'string' && tag.trim()) {
-            const normalizedTag = tag.trim();
-            tagCounts.set(normalizedTag, (tagCounts.get(normalizedTag) || 0) + 1);
-          }
-        });
-      }
-    });
-    
-    // 按使用次数排序
-    return Array.from(tagCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([tag]) => tag);
   }
   
   // ==================== 右键菜单相关方法 ====================

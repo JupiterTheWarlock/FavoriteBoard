@@ -541,7 +541,6 @@ class ToolboxApp {
       parentId: bookmark.parentId,
       folderId: bookmark.parentId,
       iconUrl: bookmark.iconUrl || this.generateFaviconUrl(bookmark.url),
-      tags: this.extractTagsFromTitle(bookmark.title),
       dateAdded: bookmark.dateAdded,
       dateGrouped: bookmark.dateGrouped
     }));
@@ -778,14 +777,6 @@ class ToolboxApp {
     } catch (e) {
       return '';
     }
-  }
-  
-  /**
-   * 从标题提取标签
-   */
-  extractTagsFromTitle(title) {
-    // 简单的标签提取逻辑，可以后续完善
-    return [];
   }
   
   /**

@@ -51,7 +51,6 @@ async function initializeExtension() {
         version: '1.0.0',
         theme: 'light',
         showFolderIcons: true,
-        autoGenerateTags: true,
         cacheTimeout: 5 * 60 * 1000, // 5分钟缓存
         lastSync: Date.now()
       }
@@ -152,7 +151,6 @@ async function processBookmarkTree(bookmarkTree) {
         url: node.url,
         parentId: node.parentId,
         dateAdded: node.dateAdded,
-        tags: generateAutoTags(node.url),
         domain: extractDomain(node.url),
         path: currentPath
       };
@@ -184,42 +182,6 @@ function countBookmarksInFolder(folderNode) {
   
   countRecursive(folderNode);
   return count;
-}
-
-// 从URL生成自动标签
-function generateAutoTags(url) {
-  try {
-    const domain = extractDomain(url);
-    const tags = [];  // 不再直接把域名加入标签列表
-    
-    // 根据常见域名添加分类标签
-    const categoryMap = {
-      'github.com': ['开发', '代码', 'Git'],
-      'stackoverflow.com': ['开发', '问答', '编程'],
-      'youtube.com': ['视频', '娱乐'],
-      'bilibili.com': ['视频', '娱乐', '学习'],
-      'zhihu.com': ['知识', '问答', '社交'],
-      'baidu.com': ['搜索', '工具'],
-      'google.com': ['搜索', '工具'],
-      'figma.com': ['设计', '工具'],
-      'notion.so': ['笔记', '工具', '协作']
-    };
-    
-    if (categoryMap[domain]) {
-      tags.push(...categoryMap[domain]);
-    }
-    
-    // 根据URL路径添加标签
-    if (url.includes('/docs')) tags.push('文档');
-    if (url.includes('/blog')) tags.push('博客');
-    if (url.includes('/tutorial')) tags.push('教程');
-    if (url.includes('/api')) tags.push('API');
-    
-    return [...new Set(tags)]; // 去重
-  } catch (error) {
-    console.warn('⚠️ Error generating tags for URL:', url, error);
-    return [];
-  }
 }
 
 // 提取域名
