@@ -305,6 +305,20 @@ class BookmarkTab extends BaseTab {
   // ==================== 右键菜单相关方法 ====================
   
   /**
+   * 智能定位菜单位置（使用通用工具函数）
+   * @param {Event} event - 鼠标事件
+   * @param {HTMLElement} menu - 菜单元素
+   * @returns {Object} 包含left和top的位置对象
+   */
+  calculateMenuPosition(event, menu) {
+    return calculateSmartMenuPosition(event, menu, {
+      margin: 10,
+      preferRight: true,
+      preferBottom: true
+    });
+  }
+  
+  /**
    * 显示右键菜单
    * @param {Event} event - 鼠标事件
    * @param {Object} link - 链接对象
@@ -343,10 +357,13 @@ class BookmarkTab extends BaseTab {
       </div>
     `;
     
-    // 定位菜单
+    // 智能定位菜单
+    const position = this.calculateMenuPosition(event, menu);
+    
+    // 设置菜单样式和位置
     menu.style.position = 'fixed';
-    menu.style.left = Math.min(event.clientX, window.innerWidth - 200) + 'px';
-    menu.style.top = Math.min(event.clientY, window.innerHeight - 200) + 'px';
+    menu.style.left = position.left + 'px';
+    menu.style.top = position.top + 'px';
     menu.style.zIndex = '10000';
     
     document.body.appendChild(menu);
@@ -355,7 +372,7 @@ class BookmarkTab extends BaseTab {
     // 绑定菜单事件
     this.bindContextMenuEvents(menu, link, card);
     
-    console.log('🐱 显示右键菜单');
+    console.log('🐱 显示右键菜单，位置:', position);
   }
   
   /**

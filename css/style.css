@@ -947,11 +947,15 @@ body {
   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   padding: 0.5rem 0;
   min-width: 160px;
-  z-index: 9999;
+  max-width: 250px;
+  z-index: 99999;
   opacity: 0;
   visibility: hidden;
   transform: scale(0.95);
   transition: all 0.15s ease;
+  /* 确保菜单始终可见 */
+  pointer-events: auto;
+  box-sizing: border-box;
 }
 
 .context-menu.show,
