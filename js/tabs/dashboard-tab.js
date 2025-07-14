@@ -362,6 +362,12 @@ class DashboardTab extends BaseTab {
   onDataUpdate(action, data) {
     super.onDataUpdate(action, data);
     
+    // 发布Dashboard数据更新事件
+    this.emitEvent('dashboard-data-updated', {
+      action: action,
+      statsData: this.statsData
+    });
+    
     // 收藏夹数据变化时重新收集统计
     if (['bookmark-created', 'bookmark-removed', 'bookmark-changed', 'bookmark-moved'].includes(action)) {
       console.log('🔄 收藏夹数据变化，刷新Dashboard统计');

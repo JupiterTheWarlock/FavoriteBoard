@@ -21,20 +21,74 @@ class ToolboxApp {
     
     // UI元素缓存
     this.searchInput = null;
-    this.categoryInfo = null;
-    this.mainContent = null;
     
     // 文件夹右键菜单相关
     this.currentFolderContextMenu = null;
     this.currentFolderForContext = null;
+    
+    // 事件总线引用
+    this.eventBus = window.eventBus;
     
     console.log('🐱 Tab管理器初始化开始...');
     
     // 检查扩展环境
     this.checkExtensionEnvironment();
     
+    // 初始化事件监听
+    this.initEventListeners();
+    
     // 初始化应用
     this.init();
+  }
+  
+  /**
+   * 初始化事件监听器
+   */
+  initEventListeners() {
+    if (!this.eventBus) {
+      console.warn('⚠️ 事件总线不可用，将使用传统事件处理方式');
+      return;
+    }
+    
+    console.log('🔗 初始化事件总线监听器...');
+    
+    // 监听通知请求事件
+    this.eventBus.on('notification-requested', (data) => {
+      this.showNotification(data.message, data.type);
+    });
+    
+    // 监听Tab切换请求事件
+    this.eventBus.on('tab-switch-requested', (data) => {
+      this.switchToTab(data.type, data.instanceId, data.data);
+    });
+    
+    // 监听Tab内部事件，用于调试和日志
+    this.eventBus.on('tab-internal-activated', (data) => {
+      console.log(`🐱 Tab内部激活: ${data.tabId} - ${data.title}`);
+    });
+    
+    this.eventBus.on('tab-internal-deactivated', (data) => {
+      console.log(`🐱 Tab内部失活: ${data.tabId} - ${data.title}`);
+    });
+    
+    // 监听数据刷新请求事件
+    this.eventBus.on('data-refresh-requested', () => {
+      this.refreshFolderTree();
+    });
+    
+    // 监听搜索查询变化事件
+    this.eventBus.on('search-query-changed', (query) => {
+      // 这里可以添加全局搜索处理逻辑
+      console.log('🔍 搜索查询变化:', query);
+    });
+    
+    // 监听窗口大小变化事件
+    this.eventBus.on('window-resized', () => {
+      // 处理窗口大小变化
+      console.log('📏 窗口大小变化');
+    });
+    
+    console.log('✅ 事件总线监听器初始化完成');
   }
   
   /**
@@ -117,8 +171,6 @@ class ToolboxApp {
    */
   cacheUIElements() {
     this.searchInput = document.getElementById('searchInput');
-    this.categoryInfo = document.getElementById('categoryInfo');
-    this.mainContent = document.querySelector('.main-content');
     this.linksGrid = document.getElementById('linksGrid');
     this.emptyState = document.getElementById('emptyState');
     
@@ -204,6 +256,14 @@ class ToolboxApp {
       // 失活当前Tab
       if (this.currentTab) {
         this.currentTab.onDeactivate();
+        
+        // 发布Tab失活事件（在Tab失活后发布）
+        if (this.eventBus) {
+          this.eventBus.emit('tab-deactivated', {
+            tabId: this.currentTab.id,
+            title: this.currentTab.title
+          });
+        }
       }
       
       // 获取或创建目标Tab
@@ -221,6 +281,17 @@ class ToolboxApp {
       // 激活新Tab
       targetTab.onActivate();
       this.currentTab = targetTab;
+      
+      // 发布Tab激活事件（在Tab激活后发布，避免重复调用）
+      if (this.eventBus) {
+        this.eventBus.emit('tab-switched', {
+          tabId: targetTab.id,
+          title: targetTab.title,
+          icon: targetTab.icon,
+          type: type,
+          instanceId: instanceId
+        });
+      }
       
       // 更新文件夹树选中状态
       this.updateFolderTreeSelection(type, instanceId);
@@ -419,6 +490,12 @@ class ToolboxApp {
   bindWindowEvents() {
     // 窗口大小变化
     window.addEventListener('resize', () => {
+      // 发布窗口大小变化事件
+      if (this.eventBus) {
+        this.eventBus.emit('window-resized');
+      }
+      
+      // 备用方案：直接通知当前Tab
       if (this.currentTab) {
         this.currentTab.onResize();
       }
@@ -430,6 +507,12 @@ class ToolboxApp {
    * @param {string} query - 搜索查询
    */
   handleSearch(query) {
+    // 通过事件总线发布搜索查询变化事件
+    if (this.eventBus) {
+      this.eventBus.emit('search-query-changed', query);
+    }
+    
+    // 备用方案：直接处理搜索
     if (!this.currentTab || !this.currentTab.supports('search')) {
       return;
     }
@@ -473,76 +556,17 @@ class ToolboxApp {
    * 从收藏夹数据生成文件夹树
    */
   generateFolderTreeFromBookmarks() {
-    // 获取原始收藏夹树结构
-    const rawTree = this.bookmarkManager.cache?.tree || [];
-    this.folderTree = [];
-    
-    // 处理根节点，通常包含 "书签栏"、"其他书签" 等
-    rawTree.forEach(rootNode => {
-      if (rootNode.children) {
-        // 添加一个"全部"节点
-        if (this.folderTree.length === 0) {
-          this.folderTree.push({
-            id: 'all',
-            title: '全部收藏',
-            icon: '🗂️',
-            bookmarkCount: this.bookmarkManager.cache?.totalBookmarks || 0,
-            isSpecial: true,
-            isExpanded: true,
-            children: []
-          });
-        }
-        
-        // 处理每个根节点的子节点
-        rootNode.children.forEach(child => {
-          if (child.children !== undefined) { // 这是一个文件夹
-            const processedFolder = this.processFolderNode(child, 0);
-            if (processedFolder) {
-              this.folderTree.push(processedFolder);
-            }
-          }
-        });
-      }
-    });
+    // 使用数据处理器生成文件夹树
+    this.folderTree = DataProcessor.generateFolderTree(this.bookmarkManager.cache);
     
     // 构建文件夹扁平映射表以便快速查找
-    this.folderMap = this.buildFolderMap();
+    this.folderMap = DataProcessor.buildFolderMap(this.folderTree);
     
     console.log('🌳 生成了文件夹树，根节点数量:', this.folderTree.length);
     console.log('🗂️ 构建了文件夹映射表，包含', this.folderMap.size, '个文件夹');
   }
   
-  /**
-   * 处理文件夹节点
-   */
-  processFolderNode(node, depth) {
-    const folderInfo = this.bookmarkManager.cache?.folderMap[node.id] || {};
-    
-    const folderNode = {
-      id: node.id,
-      title: node.title,
-      parentId: node.parentId,
-      icon: this.getFolderIcon(node.title, depth),
-      bookmarkCount: folderInfo.bookmarkCount || 0,
-      depth: depth,
-      isExpanded: depth < 2, // 前两层默认展开
-      children: []
-    };
-    
-    // 递归处理子文件夹
-    if (node.children) {
-      node.children.forEach(child => {
-        if (child.children !== undefined) { // 这是一个文件夹
-          const childFolder = this.processFolderNode(child, depth + 1);
-          if (childFolder) {
-            folderNode.children.push(childFolder);
-          }
-        }
-      });
-    }
-    
-    return folderNode;
-  }
+
   
   /**
    * 生成所有链接数据
@@ -558,16 +582,8 @@ class ToolboxApp {
       });
     }
     
-    this.allLinks = allBookmarks.map(bookmark => ({
-      id: bookmark.id,
-      title: bookmark.title,
-      url: bookmark.url,
-      parentId: bookmark.parentId,
-      folderId: bookmark.parentId,
-      iconUrl: bookmark.iconUrl || this.generateFaviconUrl(bookmark.url),
-      dateAdded: bookmark.dateAdded,
-      dateGrouped: bookmark.dateGrouped
-    }));
+    // 使用数据处理器生成链接数据
+    this.allLinks = DataProcessor.generateAllLinks(this.bookmarkManager.cache);
     
     console.log('🔗 生成了所有链接数据，共', this.allLinks.length, '个链接');
     if (this.allLinks.length > 0) {
@@ -578,24 +594,7 @@ class ToolboxApp {
     }
   }
   
-  /**
-   * 构建文件夹映射表
-   */
-  buildFolderMap() {
-    const map = new Map();
-    
-    const traverseTree = (nodes) => {
-      nodes.forEach(node => {
-        map.set(node.id, node);
-        if (node.children && node.children.length > 0) {
-          traverseTree(node.children);
-        }
-      });
-    };
-    
-    traverseTree(this.folderTree);
-    return map;
-  }
+
   
   /**
    * 获取文件夹及其子文件夹的ID
@@ -603,23 +602,7 @@ class ToolboxApp {
    * @returns {Array} 文件夹ID数组
    */
   getFolderAndSubfolderIds(folderId) {
-    const ids = [folderId];
-    
-    function collectChildIds(node) {
-      if (node.children) {
-        node.children.forEach(child => {
-          ids.push(child.id);
-          collectChildIds(child);
-        });
-      }
-    }
-    
-    const folder = this.folderMap.get(folderId);
-    if (folder) {
-      collectChildIds(folder);
-    }
-    
-    return ids;
+    return DataProcessor.getFolderAndSubfolderIds(folderId, this.folderMap);
   }
   
   // ==================== 文件夹树渲染 ====================
@@ -762,19 +745,7 @@ class ToolboxApp {
   
   // ==================== 文件夹右键菜单 ====================
   
-  /**
-   * 智能定位菜单位置（使用通用工具函数）
-   * @param {Event} event - 鼠标事件
-   * @param {HTMLElement} menu - 菜单元素
-   * @returns {Object} 包含left和top的位置对象
-   */
-  calculateMenuPosition(event, menu) {
-    return calculateSmartMenuPosition(event, menu, {
-      margin: 10,
-      preferRight: true,
-      preferBottom: true
-    });
-  }
+
   
   /**
    * 显示文件夹右键菜单
@@ -819,7 +790,11 @@ class ToolboxApp {
     `;
     
     // 智能定位菜单
-    const position = this.calculateMenuPosition(event, menu);
+    const position = calculateSmartMenuPosition(event, menu, {
+      margin: 10,
+      preferRight: true,
+      preferBottom: true
+    });
     
     // 设置菜单样式和位置
     menu.style.position = 'fixed';
@@ -1037,44 +1012,9 @@ class ToolboxApp {
   
   // ==================== 工具方法 ====================
   
-  /**
-   * 获取文件夹图标
-   */
-  getFolderIcon(folderTitle, depth) {
-    if (!folderTitle) return '📁';
-    
-    const titleLower = folderTitle.toLowerCase();
-    const iconMap = {
-      '工作': '💼', 'work': '💼',
-      '学习': '📚', 'study': '📚', 'education': '📚',
-      '娱乐': '🎮', 'entertainment': '🎮', 'games': '🎮',
-      '社交': '💬', 'social': '💬', 'communication': '💬',
-      '购物': '🛒', 'shopping': '🛒',
-      '新闻': '📰', 'news': '📰',
-      '技术': '⚙️', 'tech': '⚙️', 'technology': '⚙️',
-      '设计': '🎨', 'design': '🎨'
-    };
-    
-    for (const [keyword, icon] of Object.entries(iconMap)) {
-      if (titleLower.includes(keyword)) {
-        return icon;
-      }
-    }
-    
-    return '📁';
-  }
+
   
-  /**
-   * 生成Favicon URL
-   */
-  generateFaviconUrl(url) {
-    try {
-      const domain = new URL(url).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-    } catch (e) {
-      return '';
-    }
-  }
+
   
   /**
    * 监听收藏夹更新
@@ -1164,7 +1104,19 @@ class ToolboxApp {
         this.updateFolderTreeSelection(currentTabType, currentInstanceId);
       }
       
-      // 通知当前Tab数据更新
+      // 发布数据更新事件
+      if (this.eventBus) {
+        this.eventBus.emit('data-updated', {
+          action: action,
+          data: {
+            allLinks: this.allLinks,
+            folderTree: this.folderTree,
+            folderMap: this.folderMap
+          }
+        });
+      }
+      
+      // 备用方案：直接通知当前Tab数据更新
       if (this.currentTab) {
         this.currentTab.onDataUpdate(action, {
           allLinks: this.allLinks,
@@ -1227,9 +1179,17 @@ class ToolboxApp {
           <div class="error-icon">😿</div>
           <div class="error-text">Tab系统初始化失败</div>
           <div class="error-detail">${error.message}</div>
-          <button class="retry-btn" onclick="location.reload()">重试</button>
+          <button class="retry-btn" data-action="reload">重试</button>
         </div>
       `;
+      
+      // 绑定重试按钮事件
+      const retryBtn = emptyState.querySelector('.retry-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          location.reload();
+        });
+      }
     }
   }
   

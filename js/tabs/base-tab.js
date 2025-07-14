@@ -30,11 +30,65 @@ class BaseTab {
       ...options
     };
     
+    // 事件总线引用
+    this.eventBus = window.eventBus;
+    
     // 绑定方法上下文
     this.handleSearch = this.handleSearch.bind(this);
     this.handleResize = this.handleResize.bind(this);
     
+    // 初始化事件监听
+    this.initEventListeners();
+    
     console.log(`🐱 Tab创建: ${this.id} - ${this.title}`);
+  }
+  
+  // ==================== 事件系统 ====================
+  
+  /**
+   * 初始化事件监听器
+   */
+  initEventListeners() {
+    if (!this.eventBus) {
+      console.warn(`⚠️ [${this.id}] 事件总线不可用`);
+      return;
+    }
+    
+    // 监听搜索事件
+    this.eventBus.on('search-query-changed', this.handleSearch);
+    
+    // 监听窗口大小变化事件
+    this.eventBus.on('window-resized', this.handleResize);
+    
+    // 监听数据更新事件
+    this.eventBus.on('data-updated', (data) => {
+      this.onDataUpdate(data.action, data.data);
+    });
+    
+    // 注意：Tab的激活/失活事件由外部控制，这里不需要监听自己的激活事件
+    // 避免无限递归调用
+  }
+  
+  /**
+   * 清理事件监听器
+   */
+  cleanupEventListeners() {
+    if (!this.eventBus) return;
+    
+    this.eventBus.off('search-query-changed', this.handleSearch);
+    this.eventBus.off('window-resized', this.handleResize);
+    this.eventBus.off('data-updated');
+  }
+  
+  /**
+   * 发布事件
+   * @param {string} event - 事件名称
+   * @param {any} data - 事件数据
+   */
+  emitEvent(event, data = null) {
+    if (this.eventBus) {
+      this.eventBus.emit(event, data);
+    }
   }
   
   // ==================== 必须实现的抽象方法 ====================
@@ -73,6 +127,13 @@ class BaseTab {
     
     // 更新搜索栏显示状态
     this.updateSearchBarVisibility();
+    
+    // 发布Tab内部激活事件
+    this.emitEvent('tab-internal-activated', {
+      tabId: this.id,
+      title: this.title,
+      icon: this.icon
+    });
   }
   
   /**
@@ -87,6 +148,12 @@ class BaseTab {
     
     // 清理搜索状态
     this.clearSearch();
+    
+    // 发布Tab内部失活事件
+    this.emitEvent('tab-internal-deactivated', {
+      tabId: this.id,
+      title: this.title
+    });
   }
   
   /**
@@ -94,6 +161,9 @@ class BaseTab {
    */
   destroy() {
     console.log(`🐱 Tab销毁: ${this.id}`);
+    
+    // 清理事件监听器
+    this.cleanupEventListeners();
     
     // 清理容器
     if (this.container) {
@@ -104,6 +174,12 @@ class BaseTab {
     // 重置状态
     this.isActive = false;
     this.isInitialized = false;
+    
+    // 发布Tab销毁事件
+    this.emitEvent('tab-destroyed', {
+      tabId: this.id,
+      title: this.title
+    });
   }
   
   // ==================== 可选的事件处理方法 ====================
@@ -293,11 +369,24 @@ class BaseTab {
             <summary>错误详情</summary>
             <pre>${error.message}\n${error.stack}</pre>
           </details>
-          <button class="retry-btn" onclick="window.linkBoardApp?.switchToTab('${this.id}')">
+          <button class="retry-btn" data-tab-id="${this.id}">
             重试
           </button>
         </div>
       `;
+      
+      // 绑定重试按钮事件
+      const retryBtn = this.container.querySelector('.retry-btn');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          // 通过事件系统请求Tab切换
+          this.emitEvent('tab-switch-requested', {
+            type: 'bookmark',
+            instanceId: 'default',
+            data: null
+          });
+        });
+      }
     }
   }
   
@@ -329,6 +418,12 @@ class BaseTab {
   handleSearch(query) {
     if (this.supports('search')) {
       this.onSearch(query);
+      
+      // 发布搜索处理事件
+      this.emitEvent('tab-search-handled', {
+        tabId: this.id,
+        query: query
+      });
     }
   }
   
@@ -364,7 +459,14 @@ class BaseTab {
    * @param {string} type - 消息类型 (info/success/warning/error)
    */
   showNotification(message, type = 'info') {
-    // 调用全局通知方法
+    // 通过事件系统发布通知
+    this.emitEvent('notification-requested', {
+      message: message,
+      type: type,
+      source: this.id
+    });
+    
+    // 备用方案：直接调用全局通知方法
     if (window.linkBoardApp && window.linkBoardApp.showNotification) {
       window.linkBoardApp.showNotification(message, type);
     } else {

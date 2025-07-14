@@ -205,7 +205,7 @@ class BookmarkTab extends BaseTab {
     
     card.innerHTML = `
       <div class="card-header">
-        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" onerror="this.src='${this.getDefaultIcon()}'">
+        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" data-fallback="${this.getDefaultIcon()}">
         <h3 class="card-title" title="${this.escapeHtml(link.title)}">${this.escapeHtml(link.title)}</h3>
         <button class="context-menu-btn" title="更多选项">⋮</button>
       </div>
@@ -216,6 +216,47 @@ class BookmarkTab extends BaseTab {
     
     // 绑定卡片事件
     this.bindCardEvents(card, link);
+    
+    // 绑定图标错误处理
+    const iconImg = card.querySelector('.card-icon');
+    if (iconImg) {
+      let fallbackAttempts = 0;
+      iconImg.addEventListener('error', () => {
+        fallbackAttempts++;
+        
+        if (fallbackAttempts === 1) {
+          // 第一次失败：尝试使用Google favicon服务
+          if (link.url) {
+            try {
+              const domain = new URL(link.url).hostname;
+              iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+              return;
+            } catch (e) {
+              // URL解析失败，继续下一个备用方案
+            }
+          }
+        }
+        
+        if (fallbackAttempts === 2) {
+          // 第二次失败：尝试使用DuckDuckGo favicon服务
+          if (link.url) {
+            try {
+              const domain = new URL(link.url).hostname;
+              iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
+              return;
+            } catch (e) {
+              // URL解析失败，继续下一个备用方案
+            }
+          }
+        }
+        
+        // 最终备用方案：使用默认图标
+        const fallbackUrl = iconImg.dataset.fallback;
+        if (fallbackUrl && iconImg.src !== fallbackUrl) {
+          iconImg.src = fallbackUrl;
+        }
+      });
+    }
     
     return card;
   }
@@ -474,26 +515,23 @@ class BookmarkTab extends BaseTab {
    * @returns {string}
    */
   getSafeIcon(iconUrl, websiteUrl = null) {
-    // 如果没有图标URL，使用默认图标
-    if (!iconUrl) {
-      return this.getDefaultIcon();
-    }
-    
-    // 如果是有效的URL，直接返回
-    if (this.isValidIconUrl(iconUrl)) {
+    // 优先级1: 如果有有效的图标URL，使用它
+    if (iconUrl && this.isValidIconUrl(iconUrl)) {
       return iconUrl;
     }
     
-    // 尝试从网站URL生成favicon
+    // 优先级2: 尝试从网站URL生成favicon
     if (websiteUrl) {
       try {
         const domain = new URL(websiteUrl).hostname;
+        // 使用多个favicon服务作为备用
         return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
       } catch (e) {
-        // URL解析失败，使用默认图标
+        console.warn('无法解析网站URL生成favicon:', websiteUrl);
       }
     }
     
+    // 优先级3: 使用默认图标
     return this.getDefaultIcon();
   }
   
@@ -638,11 +676,24 @@ class BookmarkTab extends BaseTab {
   onDataUpdate(action, data) {
     console.log(`📊 收藏夹Tab数据更新: ${action}`, data);
     
+    // 发布Tab数据更新事件
+    this.emitEvent('tab-data-updated', {
+      tabId: this.id,
+      action: action,
+      folderId: this.folderId
+    });
+    
     // 重新加载数据并渲染
     if (this.isActive && this.container) {
       this.loadBookmarkData(window.linkBoardApp).then(() => {
         this.renderBookmarkContent(this.container);
         this.bindBookmarkEvents();
+        
+        // 发布Tab渲染完成事件
+        this.emitEvent('tab-rendered', {
+          tabId: this.id,
+          linkCount: this.currentLinks.length
+        });
       });
     }
   }
