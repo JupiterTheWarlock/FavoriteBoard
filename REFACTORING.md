@@ -274,35 +274,9 @@ class StateManager {
 - 将数据处理逻辑集成到状态管理器
 - 实现响应式数据更新
 
-### 第四阶段：UI管理重构 🎨
+### 第四阶段：Tab系统优化 📋
 
-#### 步骤 4.1: 创建UI管理器
-```javascript
-// js/ui/ui-manager.js
-class UIManager {
-  constructor(eventBus, stateManager) {
-    this.eventBus = eventBus;
-    this.stateManager = stateManager;
-    this.tabContainer = new TabContainer();
-    this.sidebarManager = new SidebarManager();
-    this.dialogManager = new DialogManager();
-    this.contextMenuManager = new ContextMenuManager();
-  }
-  
-  init() {
-    this.bindEvents();
-    this.setupStateSubscriptions();
-  }
-}
-```
-
-#### 步骤 4.2: 分离UI组件
-- 创建独立的UI组件管理器
-- 实现组件间的松耦合
-
-### 第五阶段：Tab系统优化 📋
-
-#### 步骤 5.1: 优化Tab容器
+#### 步骤 4.1: 创建Tab容器类 ✅
 ```javascript
 // js/ui/tab-container.js
 class TabContainer {
@@ -310,18 +284,73 @@ class TabContainer {
     this.eventBus = eventBus;
     this.stateManager = stateManager;
     this.tabFactory = new TabFactory();
-    this.activeTabs = new Map();
+    this.registeredTabs = new Map();
+    this.activeTab = null;
+    this.tabHistory = [];
+    // ...
   }
   
-  switchTab(tabId, options = {}) {
-    this.eventBus.emit('tab-switch-requested', { tabId, options });
-  }
+  registerTab(type, instanceId = 'default', data = null) { /* ... */ }
+  async switchToTab(type, instanceId = 'default', options = {}) { /* ... */ }
+  async renderTab(tab, container) { /* ... */ }
+  destroyTab(type, instanceId = 'default') { /* ... */ }
+  // ...
 }
 ```
 
-#### 步骤 5.2: 增强Tab生命周期
+#### 步骤 4.2: 重构主应用程序 ✅
+- 从主应用中提取Tab管理相关的功能
+- 委托给TabContainer类处理
+- 简化主应用职责
+
+#### 步骤 4.3: 增强Tab生命周期 ✅
 - 实现更完善的Tab生命周期管理
 - 优化Tab间的数据共享
+- 通过事件总线进行通信
+
+#### 步骤 4.4: 优化Tab切换流程 ✅
+- 实现Tab历史记录功能
+- 改进Tab状态管理
+- 提升Tab切换性能
+
+#### 步骤 4.5: 添加核心系统初始化脚本 ✅
+```javascript
+// js/core/init.js
+(function() {
+  // 创建全局事件总线
+  window.eventBus = new EventBus();
+  
+  // 页面加载完成后初始化应用
+  window.addEventListener('DOMContentLoaded', () => {
+    window.linkBoardApp = new ToolboxApp();
+    // ...
+  });
+  
+  // ...
+})();
+```
+
+#### 完成情况
+- ✅ 创建了TabContainer类，负责Tab的生命周期管理
+- ✅ 将Tab管理相关的功能从主应用中提取出来
+- ✅ 实现了更完善的Tab生命周期管理
+- ✅ 优化了Tab切换流程和性能
+- ✅ 添加了核心系统初始化脚本
+- ✅ 更新了HTML结构，添加了专门的Tab内容容器
+
+#### 效果
+- 代码职责更加清晰
+- Tab系统更加模块化
+- 性能得到提升
+- 扩展性更好
+
+### 第五阶段：UI管理重构 🎨 (计划中)
+- **时间**: 预计 4-5 天
+- **内容**:
+  - 分离UI管理逻辑
+  - 创建专门的UI组件
+  - 优化渲染性能
+- **预期成果**: UI逻辑清晰，组件可复用
 
 ---
 
@@ -355,16 +384,11 @@ FavoriteBoard/
 │   │   ├── bookmark-manager.js # 数据源管理
 │   │   ├── data-processor.js   # 数据处理 ✅
 │   │   └── cache-manager.js    # 缓存管理
-│   ├── ui/                     # UI层
-│   │   ├── ui-manager.js       # UI管理器
-│   │   ├── tab-container.js    # Tab容器
-│   │   ├── sidebar-manager.js  # 侧边栏管理
-│   │   ├── dialog-manager.js   # 对话框管理
-│   │   └── context-menu-manager.js # 右键菜单
 │   ├── tabs/                   # Tab实现
 │   │   ├── base-tab.js
 │   │   ├── dashboard-tab.js
 │   │   ├── bookmark-tab.js
+│   │   ├── tab-container.js    # Tab容器
 │   │   └── tab-factory.js
 │   ├── utils/                  # 工具函数
 │   │   ├── dom-utils.js        # DOM操作
