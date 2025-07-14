@@ -68,9 +68,14 @@ class DashboardTab extends BaseTab {
     console.log('📊 收集Dashboard统计数据...');
     
     try {
-      // 获取所有链接数据
-      const allLinks = app.allLinks || [];
-      const folderTree = app.folderTree || [];
+      // 从StateManager获取数据
+      const stateManager = app.stateManager;
+      if (!stateManager) {
+        throw new Error('StateManager不可用');
+      }
+      
+      const allLinks = stateManager.getStateValue('data.allLinks') || [];
+      const folderTree = stateManager.getStateValue('data.folderTree') || [];
       const bookmarkManager = app.bookmarkManager;
       
       // 基础统计

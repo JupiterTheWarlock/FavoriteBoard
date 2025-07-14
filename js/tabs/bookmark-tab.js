@@ -83,16 +83,24 @@ class BookmarkTab extends BaseTab {
    */
   async loadBookmarkData(app) {
     try {
+      // 从StateManager获取数据
+      const stateManager = app.stateManager;
+      if (!stateManager) {
+        throw new Error('StateManager不可用');
+      }
+      
+      const allLinks = stateManager.getStateValue('data.allLinks') || [];
+      
       // 根据文件夹ID获取链接数据
       if (this.folderId === 'all') {
         // 显示所有书签
-        this.currentLinks = [...(app.allLinks || [])];
+        this.currentLinks = [...allLinks];
       } else if (this.folderId) {
         // 显示特定文件夹的书签
-        this.currentLinks = this.getLinksForFolder(app, this.folderId);
+        this.currentLinks = this.getLinksForFolder(stateManager, this.folderId);
       } else {
         // 默认显示所有书签
-        this.currentLinks = [...(app.allLinks || [])];
+        this.currentLinks = [...allLinks];
       }
       
       // 按时间倒序排序：最新添加的链接排在前面
@@ -114,16 +122,16 @@ class BookmarkTab extends BaseTab {
   
   /**
    * 获取指定文件夹的链接
-   * @param {ToolboxApp} app - 应用实例
+   * @param {StateManager} stateManager - 状态管理器实例
    * @param {string} folderId - 文件夹ID
    * @returns {Array} 链接数组
    */
-  getLinksForFolder(app, folderId) {
-    const allLinks = app.allLinks || [];
+  getLinksForFolder(stateManager, folderId) {
+    const allLinks = stateManager.getStateValue('data.allLinks') || [];
+    const folderMap = stateManager.getStateValue('data.folderMap') || new Map();
     
     // 获取文件夹及其子文件夹的ID
-    const folderIds = app.getFolderAndSubfolderIds ? 
-      app.getFolderAndSubfolderIds(folderId) : [folderId];
+    const folderIds = DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
     
     // 筛选属于这些文件夹的链接 - 确保类型一致性
     const matchedLinks = allLinks.filter(link => {

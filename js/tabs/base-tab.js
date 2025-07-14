@@ -65,6 +65,11 @@ class BaseTab {
       this.onDataUpdate(data.action, data.data);
     });
     
+    // 监听状态管理器的状态变更事件
+    this.eventBus.on('state-changed', (data) => {
+      this.onStateChanged(data);
+    });
+    
     // 注意：Tab的激活/失活事件由外部控制，这里不需要监听自己的激活事件
     // 避免无限递归调用
   }
@@ -209,6 +214,19 @@ class BaseTab {
   onDataUpdate(action, data) {
     console.log(`📊 Tab ${this.id} 数据更新: ${action}`, data);
     // 默认实现为空，子类可重写
+  }
+  
+  /**
+   * 处理状态变更 - 子类可重写此方法
+   * @param {Object} stateChangeData - 状态变更数据
+   */
+  onStateChanged(stateChangeData) {
+    console.log(`🔄 [${this.id}] 状态变更: ${stateChangeData.source}`);
+    
+    // 如果是数据相关的状态变更且当前Tab是激活状态，触发数据更新
+    if (this.isActive && stateChangeData.updates && stateChangeData.updates.data) {
+      this.onDataUpdate('state-changed', stateChangeData.updates.data);
+    }
   }
   
   // ==================== 公共方法 ====================

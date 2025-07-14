@@ -7,17 +7,16 @@
  */
 class ToolboxApp {
   constructor() {
+    // 核心系统
+    this.eventBus = window.eventBus;
+    this.stateManager = null;  // 状态管理器
+    
     // Tab管理相关
     this.tabFactory = null;
-    this.currentTab = null;
-    this.registeredTabs = new Map();
+    this.localRegisteredTabs = new Map(); // 本地Tab实例管理
     
     // 数据管理
     this.bookmarkManager = new BookmarkManager();
-    this.allLinks = [];
-    this.folderTree = [];
-    this.folderMap = new Map();
-    this.isLoading = true;
     
     // UI元素缓存
     this.searchInput = null;
@@ -26,19 +25,71 @@ class ToolboxApp {
     this.currentFolderContextMenu = null;
     this.currentFolderForContext = null;
     
-    // 事件总线引用
-    this.eventBus = window.eventBus;
-    
     console.log('🐱 Tab管理器初始化开始...');
     
     // 检查扩展环境
     this.checkExtensionEnvironment();
+    
+    // 初始化状态管理器
+    this.initStateManager();
     
     // 初始化事件监听
     this.initEventListeners();
     
     // 初始化应用
     this.init();
+  }
+  
+  /**
+   * 初始化状态管理器
+   */
+  initStateManager() {
+    try {
+      if (!this.eventBus) {
+        throw new Error('事件总线不可用');
+      }
+      
+      this.stateManager = new StateManager(this.eventBus);
+      
+      // 订阅状态变更
+      this.setupStateSubscriptions();
+      
+      console.log('✅ 状态管理器初始化完成');
+      
+    } catch (error) {
+      console.error('❌ 状态管理器初始化失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 设置状态订阅
+   */
+  setupStateSubscriptions() {
+    // 监听数据状态变更
+    this.stateManager.subscribe(['data.folderTree', 'data.allLinks'], ([folderTree, allLinks]) => {
+      // 数据更新时重新渲染文件夹树
+      if (folderTree && folderTree.length > 0) {
+        this.renderFolderTree();
+      }
+    });
+    
+    // 监听UI状态变更
+    this.stateManager.subscribe(['ui.loading'], ([loading]) => {
+      if (loading) {
+        this.showLoadingState();
+      } else {
+        this.hideLoadingState();
+      }
+    });
+    
+    // 监听Tab状态变更
+    this.stateManager.subscribe(['tabs.active'], ([activeTab]) => {
+      // Tab切换时的UI更新
+      this.updateSearchBarVisibility();
+    });
+    
+    console.log('🔗 状态订阅已设置');
   }
   
   /**
@@ -114,8 +165,8 @@ class ToolboxApp {
     try {
       console.log('🚀 初始化Tab管理器...');
       
-      // 显示加载状态
-      this.showLoadingState();
+      // 设置初始加载状态
+      this.stateManager.setUIState({ loading: true }, 'app-init');
       
       // 初始化Tab系统
       this.initTabSystem();
@@ -123,15 +174,8 @@ class ToolboxApp {
       // 缓存UI元素
       this.cacheUIElements();
       
-      // 加载收藏夹数据
-      await this.loadBookmarksData();
-      
-      // 生成文件夹树和链接数据
-      this.generateFolderTreeFromBookmarks();
-      this.generateAllLinks();
-      
-      // 渲染文件夹树
-      this.renderFolderTree();
+      // 加载收藏夹数据并处理
+      await this.loadAndProcessBookmarksData();
       
       // 注册默认Tab
       this.registerDefaultTabs();
@@ -145,13 +189,14 @@ class ToolboxApp {
       // 监听收藏夹更新
       this.setupBookmarkListeners();
       
-      // 隐藏加载状态
-      this.hideLoadingState();
+      // 完成初始化
+      this.stateManager.setUIState({ loading: false }, 'app-init');
       
       console.log('✅ Tab管理器初始化完成');
       
     } catch (error) {
       console.error('❌ Tab管理器初始化失败:', error);
+      this.stateManager.setUIState({ loading: false }, 'app-init');
       this.showErrorState(error);
     }
   }
@@ -182,7 +227,10 @@ class ToolboxApp {
    */
   registerDefaultTabs() {
     console.log('📋 注册默认Tab...');
-    console.log(`📊 当前链接总数: ${this.allLinks.length}`);
+    
+    // 从StateManager获取链接总数
+    const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
+    console.log(`📊 当前链接总数: ${allLinks.length}`);
     
     // 注册Dashboard Tab
     this.registerTab('dashboard', 'default');
@@ -192,7 +240,7 @@ class ToolboxApp {
       id: 'all', 
       title: '全部收藏', 
       icon: '🗂️',
-      bookmarkCount: this.allLinks.length 
+      bookmarkCount: allLinks.length 
     });
     
     console.log('✅ 默认Tab注册完成');
@@ -207,10 +255,18 @@ class ToolboxApp {
   registerTab(type, instanceId = 'default', data = null) {
     const tabKey = `${type}:${instanceId}`;
     
-    if (this.registeredTabs.has(tabKey)) {
-      console.log(`🔄 Tab已存在: ${tabKey}`);
-      return this.registeredTabs.get(tabKey);
+    // 从本地Map获取已注册的Tab（避免StateManager中的循环引用）
+    if (!this.localRegisteredTabs) {
+      this.localRegisteredTabs = new Map();
     }
+    
+    if (this.localRegisteredTabs.has(tabKey)) {
+      console.log(`🔄 Tab已存在: ${tabKey}`);
+      return this.localRegisteredTabs.get(tabKey);
+    }
+    
+    // 从StateManager获取Tab基本信息（用于状态跟踪）
+    const registeredTabs = this.stateManager.getStateValue('tabs.registered') || new Map();
     
     let tab = null;
     
@@ -229,7 +285,27 @@ class ToolboxApp {
       }
       
       if (tab) {
-        this.registeredTabs.set(tabKey, tab);
+        // 更新StateManager中的注册Tab（只存储Tab的基本信息，避免循环引用）
+        const newRegisteredTabs = new Map(registeredTabs);
+        newRegisteredTabs.set(tabKey, tab);
+        
+        // 为了避免状态管理器中的循环引用，我们在这里直接管理Tab注册
+        // 而不是通过StateManager存储完整的Tab对象
+        if (!this.localRegisteredTabs) {
+          this.localRegisteredTabs = new Map();
+        }
+        this.localRegisteredTabs.set(tabKey, tab);
+        
+        // 只在StateManager中存储Tab的基本信息
+        this.stateManager.setTabState({
+          registered: new Map([...registeredTabs.keys()].map(key => [key, {
+            id: registeredTabs.get(key)?.id,
+            title: registeredTabs.get(key)?.title,
+            icon: registeredTabs.get(key)?.icon,
+            isActive: registeredTabs.get(key)?.isActive
+          }]))
+        }, 'tab-register');
+        
         console.log(`✅ Tab注册成功: ${tabKey} - ${tab.getTitle()}`);
       }
       
@@ -253,21 +329,27 @@ class ToolboxApp {
     try {
       console.log(`🔄 切换到Tab: ${tabKey}`);
       
+      // 获取当前激活的Tab
+      const currentTab = this.stateManager.getStateValue('tabs.active');
+      
       // 失活当前Tab
-      if (this.currentTab) {
-        this.currentTab.onDeactivate();
-        
-        // 发布Tab失活事件（在Tab失活后发布）
-        if (this.eventBus) {
-          this.eventBus.emit('tab-deactivated', {
-            tabId: this.currentTab.id,
-            title: this.currentTab.title
-          });
+      if (currentTab) {
+        const currentTabInstance = this.localRegisteredTabs?.get(currentTab);
+        if (currentTabInstance) {
+          currentTabInstance.onDeactivate();
+          
+          // 发布Tab失活事件
+          if (this.eventBus) {
+            this.eventBus.emit('tab-deactivated', {
+              tabId: currentTabInstance.id,
+              title: currentTabInstance.title
+            });
+          }
         }
       }
       
       // 获取或创建目标Tab
-      let targetTab = this.registeredTabs.get(tabKey);
+      let targetTab = this.localRegisteredTabs?.get(tabKey);
       if (!targetTab) {
         targetTab = this.registerTab(type, instanceId, data);
         if (!targetTab) {
@@ -280,9 +362,13 @@ class ToolboxApp {
       
       // 激活新Tab
       targetTab.onActivate();
-      this.currentTab = targetTab;
       
-      // 发布Tab激活事件（在Tab激活后发布，避免重复调用）
+      // 更新StateManager中的当前Tab
+      this.stateManager.setTabState({
+        active: tabKey
+      }, 'tab-switch');
+      
+      // 发布Tab激活事件
       if (this.eventBus) {
         this.eventBus.emit('tab-switched', {
           tabId: targetTab.id,
@@ -306,6 +392,8 @@ class ToolboxApp {
       this.showNotification('Tab切换失败', 'error');
     }
   }
+  
+
   
   /**
    * 渲染Tab内容
@@ -376,8 +464,10 @@ class ToolboxApp {
    */
   updateSearchBarVisibility() {
     const searchBar = document.getElementById('searchBar');
-    if (searchBar && this.currentTab) {
-      const shouldShow = this.currentTab.supports('search');
+    if (searchBar) {
+      const currentTabKey = this.stateManager.getStateValue('tabs.active');
+      const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+      const shouldShow = currentTab?.supports('search') || false;
       searchBar.style.display = shouldShow ? 'block' : 'none';
       
       // 如果隐藏搜索栏，清空搜索内容
@@ -456,10 +546,12 @@ class ToolboxApp {
         this.switchToTab('dashboard');
       } else if (folderId) {
         // 切换到收藏夹Tab
-        const folderData = this.folderMap.get(folderId);
+        const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
+        const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
+        const folderData = folderMap.get(folderId);
         console.log(`📁 文件夹数据:`, folderData);
-        console.log(`🗂️ 文件夹映射表大小: ${this.folderMap.size}`);
-        console.log(`📊 所有链接数量: ${this.allLinks.length}`);
+        console.log(`🗂️ 文件夹映射表大小: ${folderMap.size}`);
+        console.log(`📊 所有链接数量: ${allLinks.length}`);
         this.switchToTab('bookmark', folderId, folderData);
       }
     });
@@ -496,10 +588,37 @@ class ToolboxApp {
       }
       
       // 备用方案：直接通知当前Tab
-      if (this.currentTab) {
-        this.currentTab.onResize();
-      }
+          const currentTabKey = this.stateManager.getStateValue('tabs.active');
+    const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+    if (currentTab) {
+      currentTab.onResize();
+    }
     });
+  }
+  
+  /**
+   * 加载并处理收藏夹数据
+   */
+  async loadAndProcessBookmarksData() {
+    try {
+      console.log('📊 开始加载收藏夹数据...');
+      
+      // 从BookmarkManager加载数据
+      const bookmarksData = await this.bookmarkManager.loadBookmarks();
+      
+      if (!bookmarksData) {
+        throw new Error('收藏夹数据加载失败');
+      }
+      
+      // 使用StateManager处理数据
+      await this.stateManager.processBookmarksData(bookmarksData, 'app-init');
+      
+      console.log('✅ 收藏夹数据加载并处理完成');
+      
+    } catch (error) {
+      console.error('❌ 收藏夹数据处理失败:', error);
+      throw error;
+    }
   }
   
   /**
@@ -513,12 +632,15 @@ class ToolboxApp {
     }
     
     // 备用方案：直接处理搜索
-    if (!this.currentTab || !this.currentTab.supports('search')) {
+    const currentTabKey = this.stateManager.getStateValue('tabs.active');
+    const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+    
+    if (!currentTab || !currentTab.supports('search')) {
       return;
     }
     
     // 转发搜索事件到当前Tab
-    this.currentTab.onSearch(query);
+    currentTab.onSearch(query);
     
     // 更新清空按钮显示状态
     const clearBtn = document.getElementById('clearSearch');
@@ -542,67 +664,19 @@ class ToolboxApp {
   /**
    * 加载收藏夹数据
    */
-  async loadBookmarksData() {
-    try {
-      await this.bookmarkManager.loadBookmarks();
-      console.log('📚 收藏夹数据加载成功');
-    } catch (error) {
-      console.error('❌ 收藏夹数据加载失败:', error);
-      throw error;
-    }
-  }
+
   
   /**
    * 从收藏夹数据生成文件夹树
    */
-  generateFolderTreeFromBookmarks() {
-    // 使用数据处理器生成文件夹树
-    this.folderTree = DataProcessor.generateFolderTree(this.bookmarkManager.cache);
-    
-    // 构建文件夹扁平映射表以便快速查找
-    this.folderMap = DataProcessor.buildFolderMap(this.folderTree);
-    
-    console.log('🌳 生成了文件夹树，根节点数量:', this.folderTree.length);
-    console.log('🗂️ 构建了文件夹映射表，包含', this.folderMap.size, '个文件夹');
-  }
-  
-
-  
-  /**
-   * 生成所有链接数据
-   */
-  generateAllLinks() {
-    const allBookmarks = this.bookmarkManager.cache?.flatBookmarks || [];
-    
-    console.log('📚 原始书签数据:', allBookmarks.length, '个');
-    if (allBookmarks.length > 0) {
-      console.log('📄 前几个原始书签:');
-      allBookmarks.slice(0, 3).forEach((bookmark, index) => {
-        console.log(`  ${index + 1}. "${bookmark.title}" - parentId: "${bookmark.parentId}"(${typeof bookmark.parentId})`);
-      });
-    }
-    
-    // 使用数据处理器生成链接数据
-    this.allLinks = DataProcessor.generateAllLinks(this.bookmarkManager.cache);
-    
-    console.log('🔗 生成了所有链接数据，共', this.allLinks.length, '个链接');
-    if (this.allLinks.length > 0) {
-      console.log('🔗 前几个生成的链接:');
-      this.allLinks.slice(0, 3).forEach((link, index) => {
-        console.log(`  ${index + 1}. "${link.title}" - parentId: "${link.parentId}"(${typeof link.parentId}), folderId: "${link.folderId}"(${typeof link.folderId})`);
-      });
-    }
-  }
-  
-
-  
   /**
    * 获取文件夹及其子文件夹的ID
    * @param {string} folderId - 文件夹ID
    * @returns {Array} 文件夹ID数组
    */
   getFolderAndSubfolderIds(folderId) {
-    return DataProcessor.getFolderAndSubfolderIds(folderId, this.folderMap);
+    const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
+    return DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
   }
   
   // ==================== 文件夹树渲染 ====================
@@ -621,8 +695,11 @@ class ToolboxApp {
     const dashboardNode = this.createDashboardNode();
     folderTreeContainer.appendChild(dashboardNode);
     
+    // 从StateManager获取文件夹树数据
+    const folderTree = this.stateManager.getStateValue('data.folderTree') || [];
+    
     // 渲染文件夹树
-    this.folderTree.forEach(node => {
+    folderTree.forEach(node => {
       this.renderTreeNode(node, folderTreeContainer, 0);
     });
     
@@ -706,12 +783,15 @@ class ToolboxApp {
    * @param {string} folderId - 文件夹ID
    */
   toggleTreeNode(folderId) {
-    const folder = this.folderMap.get(folderId);
+    const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
+    const folder = folderMap.get(folderId);
     if (!folder || !folder.children || folder.children.length === 0) return;
     
     // 保存当前的Tab选中状态
-    const currentTabType = this.currentTab?.type;
-    const currentInstanceId = this.currentTab?.instanceId;
+    const currentTabKey = this.stateManager.getStateValue('tabs.active');
+    const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+    const currentTabType = currentTab?.type;
+    const currentInstanceId = currentTab?.instanceId;
     
     // 切换展开状态
     folder.isExpanded = !folder.isExpanded;
@@ -757,7 +837,8 @@ class ToolboxApp {
     // 隐藏之前的菜单
     this.hideFolderContextMenu();
     
-    const folderData = this.folderMap.get(folderId);
+    const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
+    const folderData = folderMap.get(folderId);
     if (!folderData) {
       console.warn(`🐱 文件夹数据不存在: ${folderId}`);
       return;
@@ -1083,44 +1164,30 @@ class ToolboxApp {
     console.log('📊 收藏夹数据更新:', action);
     
     try {
-      // 保存当前选中的Tab信息和展开状态
-      const currentTabType = this.currentTab?.type;
-      const currentInstanceId = this.currentTab?.instanceId;
+      // 保存当前状态
+      const currentTab = this.stateManager.getStateValue('tabs.active');
       const expandedIds = this.saveFolderExpandedStates();
       
-      // 重新加载数据
-      await this.loadBookmarksData();
-      this.generateFolderTreeFromBookmarks();
-      this.generateAllLinks();
+      // 重新加载并处理数据
+      await this.loadAndProcessBookmarksData();
       
       // 恢复展开状态
       this.restoreFolderExpandedStates(expandedIds);
       
-      // 重新渲染文件夹树
-      this.renderFolderTree();
-      
       // 恢复选中状态
-      if (currentTabType && currentInstanceId) {
-        this.updateFolderTreeSelection(currentTabType, currentInstanceId);
+      if (currentTab) {
+        const [type, instanceId] = currentTab.split(':');
+        this.updateFolderTreeSelection(type, instanceId);
       }
       
-      // 发布数据更新事件
-      if (this.eventBus) {
-        this.eventBus.emit('data-updated', {
-          action: action,
-          data: {
-            allLinks: this.allLinks,
-            folderTree: this.folderTree,
-            folderMap: this.folderMap
-          }
-        });
-      }
+      // 通知当前Tab数据更新
+      const currentTabInstance = currentTab ? this.localRegisteredTabs?.get(currentTab) : null;
       
-      // 备用方案：直接通知当前Tab数据更新
-      if (this.currentTab) {
-        this.currentTab.onDataUpdate(action, {
-          allLinks: this.allLinks,
-          folderTree: this.folderTree
+      if (currentTabInstance && currentTabInstance.onDataUpdate) {
+        const dataState = this.stateManager.getDataState();
+        currentTabInstance.onDataUpdate(action, {
+          allLinks: dataState.allLinks,
+          folderTree: dataState.folderTree
         });
       }
       
@@ -1315,7 +1382,10 @@ class ToolboxApp {
       console.log('✅ 文件夹删除成功');
       
       // 如果当前显示的是被删除的文件夹，切换到Dashboard
-      if (this.currentTab && this.currentTab.folderId === folderId) {
+      const currentTabKey = this.stateManager.getStateValue('tabs.active');
+      const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+      
+      if (currentTab && currentTab.folderId === folderId) {
         console.log('🔄 切换到Dashboard（删除的是当前文件夹）');
         this.switchToTab('dashboard');
       }
@@ -1348,45 +1418,38 @@ class ToolboxApp {
       console.log('📊 开始刷新文件夹树数据...');
       
       // 保存当前状态
-      const currentTabType = this.currentTab?.type;
-      const currentInstanceId = this.currentTab?.instanceId;
+      const currentTab = this.stateManager.getStateValue('tabs.active');
       const expandedIds = this.saveFolderExpandedStates();
       
-      console.log('💾 已保存当前状态:', { currentTabType, currentInstanceId, expandedCount: expandedIds.size });
+      console.log('💾 已保存当前状态:', { currentTab, expandedCount: expandedIds.size });
       
       // 强制刷新BookmarkManager缓存
       await this.bookmarkManager.refreshCache();
       console.log('✅ BookmarkManager缓存已刷新');
       
-      // 重新加载数据
-      await this.loadBookmarksData();
-      console.log('✅ 收藏夹数据已重新加载');
-      
-      this.generateFolderTreeFromBookmarks();
-      console.log('✅ 文件夹树数据已重新生成');
-      
-      this.generateAllLinks();
-      console.log('✅ 链接数据已重新生成');
+      // 重新加载并处理数据
+      await this.loadAndProcessBookmarksData();
+      console.log('✅ 数据已重新加载并处理');
       
       // 恢复展开状态
       this.restoreFolderExpandedStates(expandedIds);
       console.log('✅ 展开状态已恢复');
       
-      // 重新渲染文件夹树
-      this.renderFolderTree();
-      console.log('✅ 文件夹树已重新渲染');
-      
       // 恢复选中状态
-      if (currentTabType && currentInstanceId) {
-        this.updateFolderTreeSelection(currentTabType, currentInstanceId);
+      if (currentTab) {
+        const [type, instanceId] = currentTab.split(':');
+        this.updateFolderTreeSelection(type, instanceId);
         console.log('✅ 选中状态已恢复');
       }
       
       // 通知当前Tab数据更新
-      if (this.currentTab && this.currentTab.onDataUpdate) {
-        this.currentTab.onDataUpdate('manual-refresh', {
-          allLinks: this.allLinks,
-          folderTree: this.folderTree
+      const currentTabInstance = currentTab ? this.localRegisteredTabs?.get(currentTab) : null;
+      
+      if (currentTabInstance && currentTabInstance.onDataUpdate) {
+        const dataState = this.stateManager.getDataState();
+        currentTabInstance.onDataUpdate('manual-refresh', {
+          allLinks: dataState.allLinks,
+          folderTree: dataState.folderTree
         });
         console.log('✅ 当前Tab已通知数据更新');
       }
