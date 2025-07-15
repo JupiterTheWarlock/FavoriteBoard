@@ -33,18 +33,36 @@ class SidebarManager {
     try {
       // 缓存DOM元素
       this.cacheElements();
-      
+      // 新增：如果没有设置按钮则插入
+      if (!document.getElementById('settingsTabBtn')) {
+        const nav = document.querySelector('.category-nav');
+        if (nav) {
+          // 创建设置按钮
+          const btn = document.createElement('button');
+          btn.id = 'settingsTabBtn';
+          btn.className = 'settings-tab-btn';
+          btn.innerHTML = '<span class="settings-icon">⚙️</span>';
+          nav.appendChild(btn);
+        }
+      }
       // 绑定事件
       this.bindEvents();
-      
-      // 绑定标题点击事件
       this.bindLogoClickEvent();
-      
+      // 新增：绑定设置按钮事件
+      const settingsBtn = document.getElementById('settingsTabBtn');
+      if (settingsBtn) {
+        settingsBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // 切换到SettingsTab，修正type为'settings'
+          if (window.eventBus) {
+            window.eventBus.emit('tab-switch-requested', { type: 'settings', instanceId: 'default' });
+          }
+        });
+      }
       // 监听状态变化
       this.setupStateSubscriptions();
-      
       this.isInitialized = true;
-      
     } catch (error) {
       console.error('❌ SidebarManager初始化失败:', error);
       throw error;
@@ -58,7 +76,8 @@ class SidebarManager {
    */
   cacheElements() {
     this.folderTreeContainer = document.getElementById('folderTree');
-    
+    // 新增：缓存设置按钮容器
+    this.settingsTabBtn = document.getElementById('settingsTabBtn');
     if (!this.folderTreeContainer) {
       console.warn('⚠️ 找不到文件夹树容器元素');
     }

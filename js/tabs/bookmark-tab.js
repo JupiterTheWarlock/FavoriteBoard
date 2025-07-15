@@ -23,6 +23,9 @@ class BookmarkTab extends BaseTab {
     // 卡片交互管理器
     this.cardInteractionManager = null;
     
+    // 显示时间偏好
+    this.showBookmarkTime = (window.Storage && window.Storage.get) ? window.Storage.get('showBookmarkTime', true) : true;
+    
     // 更新Tab标题
     if (folderData) {
       this.title = folderData.title || '收藏夹';
@@ -67,6 +70,18 @@ class BookmarkTab extends BaseTab {
       
       // 绑定事件
       this.bindBookmarkEvents();
+      
+      // 监听设置变更事件
+      if (this.eventBus) {
+        this.eventBus.on('settings-updated', (data) => {
+          if (data && typeof data.showBookmarkTime === 'boolean') {
+            this.showBookmarkTime = data.showBookmarkTime;
+            if (this.container) {
+              this.renderBookmarkContent(this.container);
+            }
+          }
+        }, { unique: true });
+      }
       
       console.log(`✅ 收藏夹Tab渲染完成: ${this.currentLinks.length} 个链接`);
       
@@ -221,6 +236,8 @@ class BookmarkTab extends BaseTab {
       </div>
       <div class="card-description">
         <span class="link-url" title="${escapeHtml(link.url)}">${escapeHtml(getDomainFromUrl(link.url))}</span>
+        <br>
+        ${this.showBookmarkTime && link.dateAdded ? `<span class="link-time" title="收藏时间">${formatTimeDetailed(new Date(parseInt(link.dateAdded)))}</span>` : ''}
       </div>
     `;
     

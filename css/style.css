@@ -59,13 +59,14 @@ body {
 
 /* 侧边栏样式 */
 .sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: fixed;
   width: var(--sidebar-width);
   background: var(--white);
   border-right: 1px solid var(--border-color);
   box-shadow: var(--shadow);
-  position: fixed;
-  height: 100vh;
-  overflow-y: auto;
   z-index: 100;
 }
 
@@ -85,6 +86,7 @@ body {
   border-radius: var(--radius);
   transition: all 0.2s ease;
   text-align: center;
+  margin-top: 1.5rem;
 }
 
 .logo:hover {
@@ -99,7 +101,11 @@ body {
 }
 
 .category-nav {
-  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  padding: 0;
 }
 
 .nav-title {
@@ -1894,6 +1900,14 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
   box-sizing: border-box;
 }
 
+/* --- 侧边栏布局增强 --- */
+.scrollable-folder-tree {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  margin: 0 0.5rem 0.5rem 0.5rem;
+}
+
 /* =========================== FolderSelector 组件样式 =========================== */
 
 /* 文件夹选择器容器 */
@@ -2183,4 +2197,64 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
     font-size: 11px;
     padding: 1px 4px;
   }
+} 
+
+/* --- 顶部logo宽度限制与居中修正 --- */
+.logo {
+  margin-top: 1.5rem;
+  max-width: calc(var(--sidebar-width) - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+}
+.logo:hover {
+  background-color: var(--bg-color);
+  transform: scale(1.05);
+  max-width: calc(var(--sidebar-width) - 32px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- 设置按钮靠左下角小巧显示 --- */
+.settings-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 36px;
+  max-height: 36px;
+  background: #f2f3f5;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-color);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  padding: 0;
+}
+.settings-tab-btn:hover {
+  background: var(--primary-color);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(52,152,219,0.15);
+}
+.settings-icon {
+  font-size: 1.2rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-label {
+  display: none;
 } 

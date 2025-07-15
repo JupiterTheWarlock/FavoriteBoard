@@ -152,45 +152,8 @@ class TabFactory {
     
     // 检查SettingsTab类是否可用
     if (typeof window.SettingsTab === 'undefined') {
-      console.warn('SettingsTab类未加载，创建基础设置Tab');
-      
-      // 创建基础设置Tab（临时实现）
-      const tab = new window.BaseTab('settings', '设置', '⚙️', {
-        showSearch: false,
-        supportSearch: false
-      });
-      
-      // 重写render方法提供基础设置界面
-      tab.render = async function(container) {
-        container.innerHTML = `
-          <div class="settings-placeholder">
-            <div class="settings-icon">⚙️</div>
-            <h2>设置功能</h2>
-            <p>设置功能正在开发中...</p>
-            <div class="settings-preview">
-              <h3>计划功能：</h3>
-              <ul>
-                <li>主题切换</li>
-                <li>布局配置</li>
-                <li>数据导入导出</li>
-                <li>扩展设置</li>
-              </ul>
-            </div>
-          </div>
-        `;
-      };
-      
-      tab.getDescription = function() {
-        return '应用设置和配置（开发中）';
-      };
-      
-      if (config.singleton) {
-        config.instances.set('default', tab);
-      }
-      
-      return tab;
+      throw new Error('SettingsTab类未加载，请确保已引入settings-tab.js');
     }
-    
     // 创建新实例
     const tab = new window.SettingsTab();
     

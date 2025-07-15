@@ -118,41 +118,47 @@ function getDomainFromUrl(url) {
 // ==================== 时间格式化相关方法 ====================
 
 /**
- * 格式化时间显示
+ * 格式化时间显示（简洁/相对）
  * @param {Date} date - 日期对象
  * @returns {string}
  */
 function formatTime(date) {
   if (!date) return '未知时间';
-  
   const now = new Date();
   const diff = now - date;
-  
   if (diff < 60000) {
     return '刚刚';
   }
-  
   if (diff < 3600000) {
     const minutes = Math.floor(diff / 60000);
     return `${minutes} 分钟前`;
   }
-  
   if (diff < 86400000) {
     const hours = Math.floor(diff / 3600000);
     return `${hours} 小时前`;
   }
-  
   if (diff < 604800000) {
     const days = Math.floor(diff / 86400000);
     return `${days} 天前`;
   }
-  
-  return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  // 超过7天，显示详细日期（带年份）
+  return formatTimeDetailed(date);
+}
+
+/**
+ * 格式化时间显示（详细/绝对，始终带年份）
+ * @param {Date} date - 日期对象
+ * @returns {string}
+ */
+function formatTimeDetailed(date) {
+  if (!date) return '未知时间';
+  // yyyy-MM-dd HH:mm
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}`;
 }
 
 // ==================== 空状态创建方法 ====================
@@ -184,6 +190,7 @@ window.getFolderIcon = getFolderIcon;
 window.escapeHtml = escapeHtml;
 window.getDomainFromUrl = getDomainFromUrl;
 window.formatTime = formatTime;
+window.formatTimeDetailed = formatTimeDetailed;
 window.createEmptyState = createEmptyState;
 
 window.TabUtils = {
@@ -194,5 +201,6 @@ window.TabUtils = {
   escapeHtml,
   getDomainFromUrl,
   formatTime,
+  formatTimeDetailed,
   createEmptyState
 };

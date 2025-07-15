@@ -81,3 +81,4 @@ const Storage = {
         }
     }
 }; 
+window.Storage = Storage; 

@@ -42,7 +42,11 @@ class TabContainer {
     
     // 监听Tab切换请求事件
     this.eventBus.on('tab-switch-requested', (data) => {
-      this.switchToTab(data.tabId, data.instanceId, data.options);
+      // 兼容旧参数tabId，也支持新参数type
+      const type = data.type || data.tabId;
+      const instanceId = data.instanceId || 'default';
+      const options = data.options || {};
+      this.switchToTab(type, instanceId, options);
     }, { unique: true });
     
     // 监听Tab注册请求事件
