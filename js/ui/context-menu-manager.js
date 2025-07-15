@@ -568,9 +568,10 @@ class ContextMenuManager {
    * @returns {boolean} 是否为根文件夹
    */
   isRootFolder(folderData) {
-    // 这里可以根据具体的业务逻辑来判断
-    // 暂时使用简单的判断逻辑
-    return folderData.parentId === '1' || folderData.parentId === '2';
+    // 检查是否为Chrome浏览器自带的特殊文件夹
+    // ID "1" 为收藏栏
+    // ID "2" 为其他收藏夹
+    return folderData.id === '1' || folderData.id === '2' || folderData.parentId === '0';
   }
   
   /**

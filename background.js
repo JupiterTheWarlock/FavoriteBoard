@@ -577,6 +577,11 @@ async function handleDeleteFolder(folderId) {
       throw new Error('Folder ID is required');
     }
     
+    // 检查是否为浏览器内置文件夹（不允许删除）
+    if (folderId === '1' || folderId === '2') {
+      throw new Error('不能删除浏览器内置的"收藏栏"或"其他收藏夹"');
+    }
+    
     // 验证文件夹是否存在
     try {
       const [folder] = await chrome.bookmarks.get(folderId);
