@@ -349,7 +349,6 @@ class TabContainer {
 - **内容**:
   - 分离UI管理逻辑
   - 创建专门的UI组件
-  - 优化渲染性能
 - **预期成果**: UI逻辑清晰，组件可复用
 
 ---
@@ -450,21 +449,21 @@ FavoriteBoard/
   - 响应式状态更新
 - **预期成果**: 数据流清晰，状态可预测
 
-### 里程碑 4: UI管理重构 🎨 (计划中)
+### 里程碑 4: Tab系统优化 🎨 (计划中)
 - **时间**: 预计 4-5 天
-- **内容**:
-  - 分离UI管理逻辑
-  - 创建专门的UI组件
-  - 优化渲染性能
-- **预期成果**: UI逻辑清晰，组件可复用
-
-### 里程碑 5: Tab系统优化 📋 (计划中)
-- **时间**: 预计 2-3 天
 - **内容**:
   - 优化Tab生命周期
   - 增强Tab间通信
   - 实现Tab持久化
 - **预期成果**: Tab系统更稳定，用户体验更好
+
+### 里程碑 5: Tab系统优化 📋 (计划中)
+- **时间**: 预计 2-3 天
+- **内容**:
+  - 分离UI管理逻辑
+  - 创建专门的UI组件
+  - 优化渲染性能
+- **预期成果**: UI逻辑清晰，组件可复用
 
 ---
 
@@ -492,39 +491,6 @@ describe('EventBus', () => {
   });
 });
 ```
-
-### 集成测试
-```javascript
-// 测试状态管理和UI的集成
-describe('StateManager + UIManager Integration', () => {
-  test('should update UI when state changes', async () => {
-    const stateManager = new StateManager(eventBus);
-    const uiManager = new UIManager(eventBus, stateManager);
-    
-    stateManager.setState({ currentTab: 'dashboard' });
-    
-    await waitFor(() => {
-      expect(uiManager.getCurrentTab()).toBe('dashboard');
-    });
-  });
-});
-```
-
-### E2E测试
-```javascript
-// 测试完整的用户流程
-describe('User Workflow', () => {
-  test('should switch tabs and display content', async () => {
-    await page.click('[data-folder-id="dashboard"]');
-    await expect(page).toHaveText('Dashboard');
-    
-    await page.click('[data-folder-id="all"]');
-    await expect(page).toHaveText('全部收藏');
-  });
-});
-```
-
----
 
 ## 📊 重构效果预期
 

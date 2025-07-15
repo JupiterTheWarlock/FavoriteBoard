@@ -1193,10 +1193,6 @@ class ToolboxApp {
   
   // ==================== 工具方法 ====================
   
-
-  
-
-  
   /**
    * 监听收藏夹更新
    */
@@ -1709,73 +1705,6 @@ class ToolboxApp {
     };
     
     return dialogObj;
-  }
-
-  /**
-   * 打开所有链接
-   * @param {Array} links - 链接数组
-   */
-  openAllLinks(links) {
-    if (!links || links.length === 0) {
-      this.showNotification('没有可打开的链接', 'info');
-      return;
-    }
-    
-    // 限制同时打开的链接数量
-    const maxLinks = 10;
-    const linksToOpen = links.slice(0, maxLinks);
-    
-    linksToOpen.forEach(link => {
-      chrome.tabs.create({ url: link.url, active: false });
-    });
-    
-    if (links.length > maxLinks) {
-      this.showNotification(`已打开前${maxLinks}个链接（共${links.length}个）`, 'info');
-    } else {
-      this.showNotification(`已打开全部${links.length}个链接`, 'success');
-    }
-  }
-
-  /**
-   * 导出链接
-   * @param {Array} links - 链接数组
-   */
-  exportLinks(links) {
-    if (!links || links.length === 0) {
-      this.showNotification('没有可导出的链接', 'info');
-      return;
-    }
-    
-    // 创建导出数据
-    const exportData = links.map(link => ({
-      title: link.title,
-      url: link.url,
-      dateAdded: link.dateAdded
-    }));
-    
-    // 转换为JSON字符串
-    const jsonStr = JSON.stringify(exportData, null, 2);
-    
-    // 创建Blob对象
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    
-    // 创建下载链接
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bookmarks_export_${new Date().toISOString().slice(0, 10)}.json`;
-    
-    // 触发下载
-    document.body.appendChild(a);
-    a.click();
-    
-    // 清理
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-    
-    this.showNotification(`已导出${links.length}个链接`, 'success');
   }
 }
 
