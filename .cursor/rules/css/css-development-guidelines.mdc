@@ -1,0 +1,263 @@
+---
+description: CSS开发规范和准则
+globs: *.css
+alwaysApply: false
+---
+# CSS开发规范 🎨
+
+## 文件架构原则
+
+### 文件分离策略
+- [reset.css](mdc:css/reset.css) - 浏览器默认样式重置，基础标准化
+- [style.css](mdc:css/style.css) - 主要样式文件，组件和布局样式
+- [responsive.css](mdc:css/responsive.css) - 响应式设计，移动端适配
+
+### 引入顺序
+```css
+/* 1. 重置样式 */
+@import "reset.css";
+/* 2. 主要样式 */  
+@import "style.css";
+/* 3. 响应式样式 */
+@import "responsive.css";
+```
+
+## CSS变量系统 🎯
+
+### 主题变量定义
+```css
+:root {
+  /* 主色调 */
+  --primary-color: #3498db;
+  --secondary-color: #2ecc71;
+  --accent-color: #e74c3c;
+  
+  /* 文本颜色 */
+  --text-color: #2c3e50;
+  --text-light: #7f8c8d;
+  
+  /* 背景色 */
+  --bg-color: #f8f9fa;
+  --white: #ffffff;
+  
+  /* 边框和阴影 */
+  --border-color: #e9ecef;
+  --shadow: 0 2px 10px rgba(0,0,0,0.1);
+  
+  /* 尺寸变量 */
+  --radius: 8px;
+  --sidebar-width: 280px;
+}
+```
+
+### 变量使用原则
+- ✅ 所有颜色必须使用CSS变量
+- ✅ 尺寸变量用于统一的设计系统
+- ✅ 便于主题切换和维护
+
+## 命名规范 📝
+
+### BEM命名方式 (推荐)
+```css
+/* 块(Block) */
+.sidebar { }
+
+/* 元素(Element) */
+.sidebar-header { }
+.sidebar-nav { }
+
+/* 修饰符(Modifier) */
+.tree-item--active { }
+.category-btn--selected { }
+```
+
+### 语义化类名
+```css
+/* ✅ 好的命名 */
+.main-content { }
+.search-bar { }
+.link-card { }
+.bookmark-count { }
+
+/* ❌ 避免的命名 */
+.box1 { }
+.red-text { }
+.mt-20 { }
+```
+
+## 工具类系统 🛠️
+
+### 显示控制
+```css
+.hidden { display: none !important; }
+.show { display: block !important; }
+.show-inline-block { display: inline-block !important; }
+.show-grid { display: grid !important; }
+```
+
+### 清除浮动
+```css
+.clearfix::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+```
+
+## 布局原则 📐
+
+### Flexbox优先
+```css
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.tree-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+```
+
+### Grid布局
+```css
+.links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+```
+
+## 响应式设计 📱
+
+### 移动优先策略
+```css
+/* 移动端基础样式 */
+.main-content {
+  padding: 1rem;
+}
+
+/* 平板适配 */
+@media (min-width: 768px) {
+  .main-content {
+    padding: 1.5rem;
+  }
+}
+
+/* 桌面端适配 */
+@media (min-width: 1024px) {
+  .main-content {
+    padding: 2rem;
+  }
+}
+```
+
+### 标准断点
+- 手机: `max-width: 480px`
+- 平板: `max-width: 768px`
+- 桌面: `max-width: 1024px`
+- 宽屏: `min-width: 1200px`
+
+## 动画和过渡 ✨
+
+### 统一的过渡时间
+```css
+.tree-item,
+.logo,
+.category-btn {
+  transition: all 0.2s ease;
+}
+```
+
+### 微交互原则
+- 悬停效果: `transform: translateX(2px)` 或 `transform: scale(1.05)`
+- 点击反馈: 颜色变化 + 轻微缩放
+- 平滑过渡: 0.2s ease
+
+## 状态类管理 🎛️
+
+### 交互状态
+```css
+.tree-item.active { }
+.tree-toggle.expanded { }
+.category-btn.selected { }
+```
+
+### 条件状态
+```css
+.tree-item.empty-folder { opacity: 0.6; }
+.error-tree { color: var(--accent-color); }
+```
+
+## 层级和缩进 📊
+
+### 使用data属性控制层级
+```css
+.tree-item[data-depth="0"] { padding-left: 12px !important; }
+.tree-item[data-depth="1"] { padding-left: 32px !important; }
+.tree-item[data-depth="2"] { padding-left: 52px !important; }
+```
+
+## 性能优化 ⚡
+
+### will-change属性
+```css
+.tree-item:hover {
+  will-change: transform;
+}
+```
+
+### 避免重排重绘
+- 优先使用 `transform` 而非 `position`
+- 优先使用 `opacity` 而非 `visibility`
+
+## 打印样式 🖨️
+
+```css
+@media print {
+  .sidebar { display: none; }
+  .search-bar { display: none; }
+  .link-card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}
+```
+
+## 代码组织 📂
+
+### CSS文件内部结构
+1. CSS变量定义
+2. 工具类
+3. 基础样式
+4. 组件样式
+5. 布局样式
+6. 响应式样式
+
+### 注释规范
+```css
+/* === 主要区块注释 === */
+
+/* 子组件注释 */
+.component { }
+
+/* 特殊说明的行内注释 */
+transform: translateX(2px); /* 轻微右移效果 */
+```
+
+## 兼容性要求 🔧
+
+### 浏览器前缀
+```css
+html {
+  -ms-text-size-adjust: 100%;     /* IE/Edge */
+  -webkit-text-size-adjust: 100%; /* Safari/Chrome/Android */
+  text-size-adjust: 100%;         /* 标准写法 */
+}
+```
+
+### 渐进增强
+- 基础功能在所有浏览器可用
+- 高级效果在现代浏览器增强体验

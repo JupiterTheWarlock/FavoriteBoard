@@ -1,0 +1,345 @@
+---
+globs: js/**/*.js
+description: FavoriteBoard项目JavaScript编码规范和标准
+---
+
+# FavoriteBoard JavaScript 编码规范
+
+## 🏗️ 架构原则
+
+### 核心设计原则
+- **SOLID原则**: 单一职责、开放封闭、里氏替换、接口隔离、依赖倒置
+- **DRY原则**: Don't Repeat Yourself，避免重复代码
+- **SRP原则**: Single Responsibility Principle，单一职责
+- **模块化设计**: 高内聚低耦合，避免循环依赖
+
+### 架构模式
+```javascript
+// ✅ 事件驱动架构
+class MyComponent {
+  constructor(eventBus) {
+    this.eventBus = eventBus;
+    this.setupEventListeners();
+  }
+  
+  setupEventListeners() {
+    this.eventBus.on('data-updated', this.handleDataUpdate.bind(this));
+  }
+}
+
+// ✅ 状态管理模式
+this.stateManager.setState({ loading: true }, 'component-name');
+```
+
+## 📁 文件组织规范
+
+### 目录结构
+```
+js/
+├── core/           # 核心系统（事件总线、状态管理）
+├── data/           # 数据层（数据管理、处理）
+├── ui/             # UI管理层（组件管理器）
+├── tabs/           # Tab实现（业务逻辑）
+├── utils/          # 工具函数（纯函数）
+└── config/         # 配置文件
+```
+
+### 文件命名
+- 使用kebab-case命名: `event-bus.js`, `state-manager.js`
+- 类文件与类名对应: `BookmarkManager` → `bookmark-manager.js`
+- 管理器类统一后缀: `*-manager.js`
+
+## 🎯 类和方法设计
+
+### 类结构规范
+```javascript
+/**
+ * 类描述 - 职责说明
+ * 架构说明和设计模式
+ */
+class ComponentName {
+  constructor() {
+    // 1. 属性初始化
+    this.eventBus = null;
+    this.stateManager = null;
+    
+    // 2. 组件依赖
+    this.subComponents = {};
+    
+    // 3. 初始化调用
+    this.init();
+  }
+  
+  // ==================== 生命周期方法 ====================
+  
+  init() {
+    // 初始化逻辑
+  }
+  
+  destroy() {
+    // 清理逻辑
+  }
+  
+  // ==================== 公共API方法 ====================
+  
+  publicMethod() {
+    // 公共接口
+  }
+  
+  // ==================== 事件处理方法 ====================
+  
+  handleEvent() {
+    // 事件处理
+  }
+  
+  // ==================== 私有方法 ====================
+  
+  _privateMethod() {
+    // 私有方法用下划线前缀
+  }
+}
+```
+
+### 方法分组规范
+使用注释分隔不同功能组：
+```javascript
+// ==================== 初始化方法 ====================
+// ==================== 数据管理方法 ====================  
+// ==================== 事件处理方法 ====================
+// ==================== UI操作方法 ====================
+// ==================== 工具方法 ====================
+```
+
+## 📝 注释和文档规范
+
+### 类和方法注释
+```javascript
+/**
+ * 组件管理器 - 负责UI组件的生命周期管理
+ * 实现观察者模式，监听状态变化并更新UI
+ * @param {EventBus} eventBus - 事件总线实例
+ * @param {StateManager} stateManager - 状态管理器实例
+ */
+class UIManager {
+  /**
+   * 初始化UI组件
+   * @param {Object} config - 配置对象
+   * @param {string} config.theme - 主题名称
+   * @returns {Promise<void>}
+   */
+  async initComponents(config) {
+    // 实现逻辑
+  }
+}
+```
+
+### 日志规范
+```javascript
+// ✅ 使用emoji和统一格式
+console.log('🚀 组件初始化开始...');
+console.log('✅ 组件初始化完成');
+console.warn('⚠️ 警告信息');
+console.error('❌ 错误信息:', error);
+
+// ✅ 重要操作添加详细日志
+console.log('📊 开始加载数据...', { source: 'api', params });
+```
+
+## 🔄 事件驱动架构
+
+### 事件命名规范
+```javascript
+// ✅ 使用动词-名词-状态格式
+'data-loaded'           // 数据加载完成
+'bookmark-updated'      // 书签更新
+'tab-switched'          // 标签切换
+'folder-clicked'        // 文件夹点击
+'search-query-changed'  // 搜索查询变化
+```
+
+### 事件监听规范
+```javascript
+// ✅ 使用唯一监听器避免重复绑定
+this.eventBus.on('event-name', this.handleEvent.bind(this), { unique: true });
+
+// ✅ 生命周期内正确清理
+destroy() {
+  this.eventBus.off('event-name', this.handleEvent);
+}
+```
+
+## 📊 状态管理规范
+
+### 状态更新
+```javascript
+// ✅ 指定操作源，便于调试
+this.stateManager.setState({ loading: true }, 'component-init');
+this.stateManager.setUIState({ sidebarOpen: false }, 'user-action');
+
+// ✅ 批量更新
+this.stateManager.batchUpdate(() => {
+  this.stateManager.setState({ data: newData });
+  this.stateManager.setUIState({ loading: false });
+}, 'data-refresh');
+```
+
+### 状态订阅
+```javascript
+// ✅ 订阅特定状态变化
+this.stateManager.subscribe(['data.folderTree'], ([folderTree]) => {
+  this.updateUI(folderTree);
+});
+```
+
+## 🛡️ 错误处理规范
+
+### 异步操作错误处理
+```javascript
+async loadData() {
+  try {
+    console.log('📊 开始加载数据...');
+    
+    const data = await this.dataSource.fetch();
+    
+    console.log('✅ 数据加载完成');
+    return data;
+    
+  } catch (error) {
+    console.error('❌ 数据加载失败:', error);
+    
+    // 用户友好的错误提示
+    this.showNotification('数据加载失败，请稍后重试', 'error');
+    
+    // 重新抛出供上层处理
+    throw error;
+  }
+}
+```
+
+### 防御式编程
+```javascript
+// ✅ 参数验证
+validateParams(config) {
+  if (!config || typeof config !== 'object') {
+    throw new Error('配置对象不能为空');
+  }
+}
+
+// ✅ 安全的DOM操作
+const element = document.getElementById('myElement');
+if (!element) {
+  console.warn('⚠️ 元素不存在，跳过操作');
+  return;
+}
+```
+
+## 🔧 工具函数规范
+
+### 纯函数原则
+```javascript
+// ✅ utils/ 下的函数应该是纯函数
+export function processData(input) {
+  // 不修改输入参数
+  const result = { ...input };
+  
+  // 处理逻辑
+  result.processed = true;
+  
+  return result;
+}
+
+// ❌ 避免副作用
+function badFunction(data) {
+  data.modified = true; // 修改了输入参数
+  console.log('Processing...'); // 产生副作用
+}
+```
+
+## 🎨 代码风格
+
+### ES6+ 语法
+```javascript
+// ✅ 使用const/let，避免var
+const config = { theme: 'dark' };
+let currentState = null;
+
+// ✅ 使用解构赋值
+const { eventBus, stateManager } = this.dependencies;
+
+// ✅ 使用箭头函数
+const items = data.map(item => item.id);
+
+// ✅ 使用模板字符串
+console.log(`处理项目: ${item.title}`);
+```
+
+### 异步处理
+```javascript
+// ✅ 使用async/await
+async handleAsyncOperation() {
+  try {
+    const result = await this.asyncMethod();
+    return result;
+  } catch (error) {
+    this.handleError(error);
+  }
+}
+
+// ❌ 避免回调地狱
+// callback(function(result) { ... });
+```
+
+## 🔗 依赖管理
+
+### 模块导入导出
+```javascript
+// ✅ 明确的导入
+import { SpecificClass } from './specific-module.js';
+
+// ✅ 默认导出主类
+export default class MainComponent { }
+
+// ✅ 命名导出工具函数
+export { helperFunction, utilityMethod };
+```
+
+### 避免循环依赖
+- core/ 模块不应依赖其他模块
+- ui/ 模块可依赖 core/ 和 utils/
+- tabs/ 模块可依赖 core/, ui/, utils/
+- utils/ 模块应该是独立的纯函数
+
+## 🧪 代码质量检查
+
+### 必需检查项
+- [ ] 是否遵循单一职责原则
+- [ ] 是否有适当的错误处理
+- [ ] 是否有清晰的注释说明
+- [ ] 是否正确使用事件总线
+- [ ] 是否有内存泄漏风险
+- [ ] 是否避免了循环依赖
+
+### 性能考虑
+```javascript
+// ✅ 缓存DOM查询
+constructor() {
+  this.elements = {
+    container: document.getElementById('container'),
+    button: document.querySelector('.action-btn')
+  };
+}
+
+// ✅ 批量DOM操作
+updateMultipleElements(data) {
+  const fragment = document.createDocumentFragment();
+  data.forEach(item => {
+    const element = this.createElement(item);
+    fragment.appendChild(element);
+  });
+  this.container.appendChild(fragment);
+}
+```
+
+---
+
+> 🐱 **小贴士**: 这些规范旨在确保代码的可维护性、可扩展性和团队协作效率喵～

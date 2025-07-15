@@ -1,0 +1,564 @@
+---
+globs: js/**/*.js
+description: FavoriteBoard项目架构设计模式和最佳实践
+---
+
+# FavoriteBoard 架构设计模式
+
+## 🏗️ 项目架构层次
+
+### 分层架构设计
+```
+FavoriteBoard架构
+├── 表现层 (Presentation Layer)
+│   ├── main.js              # 应用容器/协调器
+│   └── tabs/                # Tab业务逻辑
+├── UI管理层 (UI Management Layer)  
+│   └── ui/                  # UI组件管理器
+├── 核心层 (Core Layer)
+│   └── core/                # 事件总线、状态管理
+├── 数据层 (Data Layer)
+│   └── data/                # 数据管理、处理
+└── 工具层 (Utility Layer)
+    ├── utils/               # 纯工具函数
+    └── config/              # 配置管理
+```
+
+### 依赖规则
+- **单向依赖**: 上层可依赖下层，下层不能依赖上层
+- **核心独立**: core/ 层完全独立，不依赖任何其他层
+- **工具纯净**: utils/ 层只能是纯函数，无副作用
+
+## 🔄 事件驱动架构 (Event-Driven Architecture)
+
+### EventBus模式实现
+```javascript
+// ✅ 标准事件发布模式
+class ComponentA {
+  performAction(data) {
+    // 执行操作
+    const result = this.processData(data);
+    
+    // 发布事件通知其他组件
+    this.eventBus.emit('data-processed', {
+      source: 'ComponentA',
+      result: result,
+      timestamp: Date.now()
+    });
+  }
+}
+
+// ✅ 标准事件订阅模式
+class ComponentB {
+  constructor(eventBus) {
+    this.eventBus = eventBus;
+    this.setupEventListeners();
+  }
+  
+  setupEventListeners() {
+    // 使用unique选项避免重复绑定
+    this.eventBus.on('data-processed', this.handleDataProcessed.bind(this), { 
+      unique: true 
+    });
+  }
+  
+  handleDataProcessed(eventData) {
+    // 处理事件数据
+  }
+  
+  destroy() {
+    // 组件销毁时清理事件监听
+    this.eventBus.off('data-processed', this.handleDataProcessed);
+  }
+}
+```
+
+### 事件命名约定
+```javascript
+// ✅ 事件命名模式：[动词]-[名词]-[状态]
+'data-loaded'              // 数据加载完成
+'bookmark-created'         // 书签创建
+'folder-deleted'           // 文件夹删除
+'tab-switched'             // 标签切换
+'ui-state-changed'         // UI状态变化
+'search-query-updated'     // 搜索查询更新
+```
+
+## 📊 状态管理模式 (State Management Pattern)
+
+### 集中式状态管理
+```javascript
+// ✅ StateManager作为唯一状态源
+class StateManager {
+  constructor() {
+    this.state = {
+      data: {},        // 业务数据状态
+      ui: {},          // UI状态
+      tabs: {}         // Tab状态
+    };
+  }
+  
+  // 状态更新必须通过setState方法
+  setState(newState, source = 'unknown') {
+    this.state = { ...this.state, ...newState };
+    this.notifySubscribers(source);
+  }
+}
+
+// ✅ 组件订阅状态变化
+class UIComponent {
+  constructor(stateManager) {
+    this.stateManager = stateManager;
+    
+    // 订阅特定状态路径
+    this.stateManager.subscribe(['data.folderTree'], ([folderTree]) => {
+      this.updateUI(folderTree);
+    });
+  }
+}
+```
+
+### 状态更新最佳实践
+```javascript
+// ✅ 指定操作源，便于调试和追踪
+this.stateManager.setState({ loading: true }, 'data-fetch-start');
+
+// ✅ 批量状态更新
+this.stateManager.batchUpdate(() => {
+  this.stateManager.setState({ data: newData });
+  this.stateManager.setUIState({ loading: false });
+}, 'data-refresh-complete');
+
+// ✅ 条件状态更新
+if (this.stateManager.getStateValue('ui.loading') !== true) {
+  this.stateManager.setUIState({ loading: true }, 'user-action');
+}
+```
+
+## 🏭 工厂模式 (Factory Pattern)
+
+### Tab工厂模式
+```javascript
+// ✅ Tab工厂实现
+class TabFactory {
+  static createTab(type, instanceId = 'default', data = null) {
+    switch (type) {
+      case 'dashboard':
+        return new DashboardTab(instanceId, data);
+      case 'bookmark':
+        return new BookmarkTab(instanceId, data);
+      case 'settings':
+        return new SettingsTab(instanceId, data);
+      default:
+        throw new Error(`未知的Tab类型: ${type}`);
+    }
+  }
+}
+
+// ✅ 使用工厂创建Tab
+const tab = TabFactory.createTab('bookmark', folderId, {
+  folderId: folderId,
+  folderData: folderData
+});
+```
+
+### 组件工厂模式
+```javascript
+// ✅ UI组件工厂
+class UIComponentFactory {
+  static createDialog(type, config) {
+    const dialogTypes = {
+      'confirm': () => new ConfirmDialog(config),
+      'input': () => new InputDialog(config),
+      'folder-selector': () => new FolderSelectorDialog(config)
+    };
+    
+    const factory = dialogTypes[type];
+    if (!factory) {
+      throw new Error(`未知的对话框类型: ${type}`);
+    }
+    
+    return factory();
+  }
+}
+```
+
+## 👀 观察者模式 (Observer Pattern)
+
+### 状态观察者实现
+```javascript
+// ✅ StateManager作为Subject
+class StateManager {
+  constructor() {
+    this.observers = new Map(); // 存储观察者
+  }
+  
+  subscribe(statePaths, callback) {
+    const key = statePaths.join('.');
+    if (!this.observers.has(key)) {
+      this.observers.set(key, new Set());
+    }
+    this.observers.get(key).add(callback);
+  }
+  
+  notifySubscribers(source) {
+    this.observers.forEach((callbacks, statePath) => {
+      const values = this.extractStateValues(statePath);
+      callbacks.forEach(callback => callback(values, source));
+    });
+  }
+}
+
+// ✅ 组件作为Observer
+class UIManager {
+  constructor(stateManager) {
+    // 订阅UI状态变化
+    stateManager.subscribe(['ui.sidebarOpen'], ([sidebarOpen]) => {
+      this.updateSidebarVisibility(sidebarOpen);
+    });
+  }
+}
+```
+
+## 🔧 单例模式 (Singleton Pattern)
+
+### 全局管理器单例
+```javascript
+// ✅ StateManager单例实现
+class StateManager {
+  constructor() {
+    if (StateManager.instance) {
+      return StateManager.instance;
+    }
+    
+    this.state = {};
+    StateManager.instance = this;
+  }
+  
+  static getInstance() {
+    if (!StateManager.instance) {
+      StateManager.instance = new StateManager();
+    }
+    return StateManager.instance;
+  }
+}
+
+// ✅ 全局访问点
+window.stateManager = new StateManager();
+```
+
+## 📝 模板方法模式 (Template Method Pattern)
+
+### BaseTab模板方法
+```javascript
+// ✅ 抽象基类定义模板方法
+class BaseTab {
+  constructor(id, title, icon) {
+    this.id = id;
+    this.title = title;
+    this.icon = icon;
+  }
+  
+  // 模板方法定义算法骨架
+  async activate(container, data = null) {
+    try {
+      await this.beforeRender(data);
+      await this.render(container, data);
+      await this.afterRender();
+      this.bindEvents();
+    } catch (error) {
+      this.handleRenderError(error);
+    }
+  }
+  
+  // 钩子方法，子类可以重写
+  async beforeRender(data) { /* 默认实现 */ }
+  async afterRender() { /* 默认实现 */ }
+  
+  // 抽象方法，子类必须实现
+  async render(container, data) {
+    throw new Error('子类必须实现render方法');
+  }
+}
+
+// ✅ 具体实现类
+class BookmarkTab extends BaseTab {
+  async render(container, data) {
+    // 具体的渲染逻辑
+  }
+  
+  async beforeRender(data) {
+    // 数据预处理
+    this.folderData = await this.loadFolderData(data.folderId);
+  }
+}
+```
+
+## 🎯 适配器模式 (Adapter Pattern)
+
+### Chrome API适配器
+```javascript
+// ✅ Chrome API适配器
+class BookmarkAPIAdapter {
+  constructor() {
+    this.api = chrome.bookmarks;
+  }
+  
+  async getTree() {
+    return new Promise((resolve, reject) => {
+      this.api.getTree((result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(this.adaptBookmarkTree(result));
+        }
+      });
+    });
+  }
+  
+  // 适配器方法：转换API数据格式
+  adaptBookmarkTree(chromeBookmarks) {
+    return chromeBookmarks.map(node => ({
+      id: node.id,
+      title: node.title,
+      url: node.url,
+      children: node.children ? this.adaptBookmarkTree(node.children) : []
+    }));
+  }
+}
+```
+
+## 🎮 策略模式 (Strategy Pattern)
+
+### Tab切换策略
+```javascript
+// ✅ Tab切换策略接口
+class TabSwitchStrategy {
+  async switch(fromTab, toTab, options) {
+    throw new Error('策略类必须实现switch方法');
+  }
+}
+
+// ✅ 具体策略实现
+class SmoothSwitchStrategy extends TabSwitchStrategy {
+  async switch(fromTab, toTab, options) {
+    await this.fadeOut(fromTab);
+    await toTab.activate(options.container, options.data);
+    await this.fadeIn(toTab);
+  }
+}
+
+class InstantSwitchStrategy extends TabSwitchStrategy {
+  async switch(fromTab, toTab, options) {
+    if (fromTab) fromTab.deactivate();
+    await toTab.activate(options.container, options.data);
+  }
+}
+
+// ✅ 策略使用
+class TabContainer {
+  constructor() {
+    this.switchStrategy = new SmoothSwitchStrategy();
+  }
+  
+  setSwitchStrategy(strategy) {
+    this.switchStrategy = strategy;
+  }
+  
+  async switchToTab(tabKey, options) {
+    const fromTab = this.activeTab;
+    const toTab = this.tabs.get(tabKey);
+    
+    await this.switchStrategy.switch(fromTab, toTab, options);
+  }
+}
+```
+
+## 🔗 组合模式 (Composite Pattern)
+
+### UI组件树结构
+```javascript
+// ✅ 组件抽象基类
+class UIComponent {
+  constructor(id) {
+    this.id = id;
+    this.children = new Map();
+    this.parent = null;
+  }
+  
+  addChild(component) {
+    component.parent = this;
+    this.children.set(component.id, component);
+  }
+  
+  removeChild(componentId) {
+    const component = this.children.get(componentId);
+    if (component) {
+      component.parent = null;
+      this.children.delete(componentId);
+    }
+  }
+  
+  // 组合操作：递归处理所有子组件
+  render() {
+    this.renderSelf();
+    this.children.forEach(child => child.render());
+  }
+  
+  destroy() {
+    this.children.forEach(child => child.destroy());
+    this.children.clear();
+    this.destroySelf();
+  }
+}
+
+// ✅ 具体组件实现
+class UIManager extends UIComponent {
+  constructor() {
+    super('ui-manager');
+    
+    // 添加子组件
+    this.addChild(new SidebarManager('sidebar'));
+    this.addChild(new DialogManager('dialog'));
+    this.addChild(new NotificationManager('notification'));
+  }
+}
+```
+
+## 📋 命令模式 (Command Pattern)
+
+### 操作命令封装
+```javascript
+// ✅ 命令接口
+class Command {
+  execute() {
+    throw new Error('命令类必须实现execute方法');
+  }
+  
+  undo() {
+    throw new Error('命令类必须实现undo方法');
+  }
+}
+
+// ✅ 具体命令实现
+class CreateFolderCommand extends Command {
+  constructor(bookmarkManager, parentId, title) {
+    super();
+    this.bookmarkManager = bookmarkManager;
+    this.parentId = parentId;
+    this.title = title;
+    this.createdFolderId = null;
+  }
+  
+  async execute() {
+    const result = await this.bookmarkManager.createFolder(this.parentId, this.title);
+    this.createdFolderId = result.id;
+    return result;
+  }
+  
+  async undo() {
+    if (this.createdFolderId) {
+      await this.bookmarkManager.deleteFolder(this.createdFolderId);
+      this.createdFolderId = null;
+    }
+  }
+}
+
+// ✅ 命令管理器
+class CommandManager {
+  constructor() {
+    this.history = [];
+    this.currentIndex = -1;
+  }
+  
+  async executeCommand(command) {
+    // 清除当前位置之后的历史
+    this.history = this.history.slice(0, this.currentIndex + 1);
+    
+    // 执行命令
+    await command.execute();
+    
+    // 添加到历史
+    this.history.push(command);
+    this.currentIndex++;
+  }
+  
+  async undo() {
+    if (this.currentIndex >= 0) {
+      const command = this.history[this.currentIndex];
+      await command.undo();
+      this.currentIndex--;
+    }
+  }
+}
+```
+
+## 🔄 责任链模式 (Chain of Responsibility)
+
+### 事件处理链
+```javascript
+// ✅ 事件处理器基类
+class EventHandler {
+  constructor() {
+    this.nextHandler = null;
+  }
+  
+  setNext(handler) {
+    this.nextHandler = handler;
+    return handler;
+  }
+  
+  async handle(event) {
+    if (this.canHandle(event)) {
+      return await this.doHandle(event);
+    }
+    
+    if (this.nextHandler) {
+      return await this.nextHandler.handle(event);
+    }
+    
+    return false;
+  }
+  
+  canHandle(event) {
+    throw new Error('处理器必须实现canHandle方法');
+  }
+  
+  async doHandle(event) {
+    throw new Error('处理器必须实现doHandle方法');
+  }
+}
+
+// ✅ 具体处理器
+class BookmarkEventHandler extends EventHandler {
+  canHandle(event) {
+    return event.type.startsWith('bookmark-');
+  }
+  
+  async doHandle(event) {
+    console.log(`处理书签事件: ${event.type}`);
+    // 处理逻辑
+    return true;
+  }
+}
+
+class UIEventHandler extends EventHandler {
+  canHandle(event) {
+    return event.type.startsWith('ui-');
+  }
+  
+  async doHandle(event) {
+    console.log(`处理UI事件: ${event.type}`);
+    // 处理逻辑
+    return true;
+  }
+}
+
+// ✅ 构建处理链
+const bookmarkHandler = new BookmarkEventHandler();
+const uiHandler = new UIEventHandler();
+
+bookmarkHandler.setNext(uiHandler);
+```
+
+---

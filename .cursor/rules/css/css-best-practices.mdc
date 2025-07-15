@@ -1,0 +1,574 @@
+---
+description: CSS最佳实践
+globs: *.css
+alwaysApply: false
+---
+
+# CSS最佳实践 ⭐
+
+## 代码质量准则
+
+### DRY原则 (Don't Repeat Yourself)
+```css
+/* ✅ 使用CSS变量避免重复 */
+:root {
+  --button-padding: 0.75rem 1rem;
+  --hover-transition: all 0.2s ease;
+}
+
+.btn, .category-btn, .tree-item {
+  padding: var(--button-padding);
+  transition: var(--hover-transition);
+}
+
+/* ❌ 避免重复代码 */
+.btn { padding: 0.75rem 1rem; transition: all 0.2s ease; }
+.category-btn { padding: 0.75rem 1rem; transition: all 0.2s ease; }
+```
+
+### SOLID原则应用
+
+#### 单一职责原则 (SRP)
+```css
+/* ✅ 每个类只负责一个职责 */
+.layout-sidebar { /* 只负责侧边栏布局 */ }
+.theme-dark { /* 只负责暗色主题 */ }
+.state-active { /* 只负责激活状态 */ }
+
+/* ❌ 避免多重职责 */
+.sidebar-dark-active { /* 混合了布局、主题、状态 */ }
+```
+
+## 选择器最佳实践 🎯
+
+### 选择器性能
+```css
+/* ✅ 高效选择器 */
+.tree-item { }
+.tree-item.active { }
+#searchInput { }
+
+/* ❌ 性能较差的选择器 */
+* { } /* 通配符选择器 */
+.sidebar .tree .item .link { } /* 过深嵌套 */
+[class*="tree"] { } /* 属性通配符 */
+```
+
+### 避免过度限定
+```css
+/* ✅ 简洁明确 */
+.tree-item { }
+.active { }
+
+/* ❌ 过度限定 */
+.sidebar .tree .tree-item { }
+div.tree-item.active { }
+```
+
+## 模块化架构 📦
+
+### 组件独立性
+```css
+/* ✅ 组件自包含 */
+.link-card {
+  /* 所有相关样式都在这里 */
+  display: flex;
+  padding: 1rem;
+  border-radius: var(--radius);
+  transition: var(--hover-transition);
+}
+
+.link-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+```
+
+### 避免样式污染
+```css
+/* ✅ 使用命名空间 */
+.bookmark-tab .search-bar { }
+.dashboard-tab .stats-grid { }
+
+/* ✅ 或使用更具体的类名 */
+.bookmark-search-bar { }
+.dashboard-stats-grid { }
+```
+
+## 可维护性原则 🔧
+
+### 魔法数字避免
+```css
+/* ✅ 使用有意义的变量 */
+:root {
+  --header-height: 60px;
+  --sidebar-width: 280px;
+  --mobile-breakpoint: 768px;
+}
+
+/* ❌ 避免魔法数字 */
+.header { height: 60px; } /* 60px是什么意思？ */
+.sidebar { width: 280px; } /* 为什么是280px？ */
+```
+
+### 注释策略
+```css
+/**
+ * 书签卡片组件
+ * 支持拖拽、悬停效果和响应式布局
+ */
+.link-card {
+  /* 基础布局 */
+  display: flex;
+  align-items: center;
+  
+  /* 视觉样式 */
+  background: var(--white);
+  border-radius: var(--radius);
+  
+  /* 交互效果 */
+  cursor: pointer;
+  transition: var(--hover-transition); /* 统一的过渡时间 */
+}
+
+/* 悬停状态 - 轻微上浮效果 */
+.link-card:hover {
+  transform: translateY(-2px); /* 2px上浮增强层次感 */
+}
+```
+
+## 性能优化实践 ⚡
+
+### 避免昂贵的属性
+```css
+/* ✅ 性能友好 */
+.tree-item {
+  transform: translateX(0); /* GPU加速 */
+  opacity: 1;
+}
+
+.tree-item:hover {
+  transform: translateX(2px); /* 只改变transform */
+}
+
+/* ❌ 避免引起重排的属性 */
+.tree-item:hover {
+  margin-left: 2px; /* 引起布局重排 */
+  width: calc(100% + 2px); /* 引起布局重排 */
+}
+```
+
+### 合理使用will-change
+```css
+/* ✅ 适度使用 */
+.tree-item:hover {
+  will-change: transform; /* 只在需要时使用 */
+}
+
+.tree-item {
+  will-change: auto; /* 动画结束后重置 */
+}
+```
+
+## 响应式最佳实践 📱
+
+### 移动优先原则
+```css
+/* ✅ 移动优先 */
+.main-content {
+  padding: 1rem; /* 移动端基础样式 */
+}
+
+@media (min-width: 768px) {
+  .main-content {
+    padding: 1.5rem; /* 逐渐增强 */
+  }
+}
+
+@media (min-width: 1024px) {
+  .main-content {
+    padding: 2rem; /* 桌面端优化 */
+  }
+}
+```
+
+### 灵活的断点管理
+```css
+:root {
+  --mobile: 480px;
+  --tablet: 768px;
+  --desktop: 1024px;
+  --wide: 1200px;
+}
+
+@media (min-width: var(--tablet)) {
+  /* 平板样式 */
+}
+```
+
+## 可访问性考虑 ♿
+
+### 焦点管理
+```css
+/* ✅ 可见的焦点指示器 */
+.tree-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ✅ 键盘导航支持 */
+.tree-item:focus-visible {
+  outline: 2px solid var(--primary-color);
+}
+```
+
+### 颜色对比度
+```css
+/* ✅ 确保足够的对比度 */
+:root {
+  --text-color: #2c3e50; /* 深色文本 */
+  --bg-color: #f8f9fa;   /* 浅色背景 */
+  --text-light: #7f8c8d; /* 辅助文本仍需保证可读性 */
+}
+```
+
+## 错误预防 🛡️
+
+### 防御性CSS
+```css
+/* ✅ 防止内容溢出 */
+.link-card {
+  overflow: hidden;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* ✅ 设置合理的默认值 */
+.tree-item {
+  min-height: 40px; /* 确保可点击区域 */
+  box-sizing: border-box; /* 防止盒模型问题 */
+}
+```
+
+### 浏览器兼容性
+```css
+/* ✅ 渐进增强 */
+.link-card {
+  /* 基础样式 - 所有浏览器支持 */
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+/* 现代浏览器增强 */
+@supports (display: grid) {
+  .links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+```
+
+## 团队协作规范 👥
+
+### 代码审查清单
+- [ ] 是否使用了CSS变量？
+- [ ] 类名是否语义化？
+- [ ] 是否遵循BEM命名规范？
+- [ ] 响应式断点是否合理？
+- [ ] 是否有性能问题？
+- [ ] 浏览器兼容性如何？
+- [ ] 可访问性是否考虑？
+
+### 提交前检查
+```css
+/* 确保以下方面都已检查 */
+/* 1. 去除无用的CSS */
+/* 2. 合并重复的样式 */
+/* 3. 优化选择器性能 */
+/* 4. 添加必要的注释 */
+/* 5. 测试不同设备的显示效果 */
+```
+# CSS最佳实践 ⭐
+
+## 代码质量准则
+
+### DRY原则 (Don't Repeat Yourself)
+```css
+/* ✅ 使用CSS变量避免重复 */
+:root {
+  --button-padding: 0.75rem 1rem;
+  --hover-transition: all 0.2s ease;
+}
+
+.btn, .category-btn, .tree-item {
+  padding: var(--button-padding);
+  transition: var(--hover-transition);
+}
+
+/* ❌ 避免重复代码 */
+.btn { padding: 0.75rem 1rem; transition: all 0.2s ease; }
+.category-btn { padding: 0.75rem 1rem; transition: all 0.2s ease; }
+```
+
+### SOLID原则应用
+
+#### 单一职责原则 (SRP)
+```css
+/* ✅ 每个类只负责一个职责 */
+.layout-sidebar { /* 只负责侧边栏布局 */ }
+.theme-dark { /* 只负责暗色主题 */ }
+.state-active { /* 只负责激活状态 */ }
+
+/* ❌ 避免多重职责 */
+.sidebar-dark-active { /* 混合了布局、主题、状态 */ }
+```
+
+## 选择器最佳实践 🎯
+
+### 选择器性能
+```css
+/* ✅ 高效选择器 */
+.tree-item { }
+.tree-item.active { }
+#searchInput { }
+
+/* ❌ 性能较差的选择器 */
+* { } /* 通配符选择器 */
+.sidebar .tree .item .link { } /* 过深嵌套 */
+[class*="tree"] { } /* 属性通配符 */
+```
+
+### 避免过度限定
+```css
+/* ✅ 简洁明确 */
+.tree-item { }
+.active { }
+
+/* ❌ 过度限定 */
+.sidebar .tree .tree-item { }
+div.tree-item.active { }
+```
+
+## 模块化架构 📦
+
+### 组件独立性
+```css
+/* ✅ 组件自包含 */
+.link-card {
+  /* 所有相关样式都在这里 */
+  display: flex;
+  padding: 1rem;
+  border-radius: var(--radius);
+  transition: var(--hover-transition);
+}
+
+.link-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+```
+
+### 避免样式污染
+```css
+/* ✅ 使用命名空间 */
+.bookmark-tab .search-bar { }
+.dashboard-tab .stats-grid { }
+
+/* ✅ 或使用更具体的类名 */
+.bookmark-search-bar { }
+.dashboard-stats-grid { }
+```
+
+## 可维护性原则 🔧
+
+### 魔法数字避免
+```css
+/* ✅ 使用有意义的变量 */
+:root {
+  --header-height: 60px;
+  --sidebar-width: 280px;
+  --mobile-breakpoint: 768px;
+}
+
+/* ❌ 避免魔法数字 */
+.header { height: 60px; } /* 60px是什么意思？ */
+.sidebar { width: 280px; } /* 为什么是280px？ */
+```
+
+### 注释策略
+```css
+/**
+ * 书签卡片组件
+ * 支持拖拽、悬停效果和响应式布局
+ */
+.link-card {
+  /* 基础布局 */
+  display: flex;
+  align-items: center;
+  
+  /* 视觉样式 */
+  background: var(--white);
+  border-radius: var(--radius);
+  
+  /* 交互效果 */
+  cursor: pointer;
+  transition: var(--hover-transition); /* 统一的过渡时间 */
+}
+
+/* 悬停状态 - 轻微上浮效果 */
+.link-card:hover {
+  transform: translateY(-2px); /* 2px上浮增强层次感 */
+}
+```
+
+## 性能优化实践 ⚡
+
+### 避免昂贵的属性
+```css
+/* ✅ 性能友好 */
+.tree-item {
+  transform: translateX(0); /* GPU加速 */
+  opacity: 1;
+}
+
+.tree-item:hover {
+  transform: translateX(2px); /* 只改变transform */
+}
+
+/* ❌ 避免引起重排的属性 */
+.tree-item:hover {
+  margin-left: 2px; /* 引起布局重排 */
+  width: calc(100% + 2px); /* 引起布局重排 */
+}
+```
+
+### 合理使用will-change
+```css
+/* ✅ 适度使用 */
+.tree-item:hover {
+  will-change: transform; /* 只在需要时使用 */
+}
+
+.tree-item {
+  will-change: auto; /* 动画结束后重置 */
+}
+```
+
+## 响应式最佳实践 📱
+
+### 移动优先原则
+```css
+/* ✅ 移动优先 */
+.main-content {
+  padding: 1rem; /* 移动端基础样式 */
+}
+
+@media (min-width: 768px) {
+  .main-content {
+    padding: 1.5rem; /* 逐渐增强 */
+  }
+}
+
+@media (min-width: 1024px) {
+  .main-content {
+    padding: 2rem; /* 桌面端优化 */
+  }
+}
+```
+
+### 灵活的断点管理
+```css
+:root {
+  --mobile: 480px;
+  --tablet: 768px;
+  --desktop: 1024px;
+  --wide: 1200px;
+}
+
+@media (min-width: var(--tablet)) {
+  /* 平板样式 */
+}
+```
+
+## 可访问性考虑 ♿
+
+### 焦点管理
+```css
+/* ✅ 可见的焦点指示器 */
+.tree-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ✅ 键盘导航支持 */
+.tree-item:focus-visible {
+  outline: 2px solid var(--primary-color);
+}
+```
+
+### 颜色对比度
+```css
+/* ✅ 确保足够的对比度 */
+:root {
+  --text-color: #2c3e50; /* 深色文本 */
+  --bg-color: #f8f9fa;   /* 浅色背景 */
+  --text-light: #7f8c8d; /* 辅助文本仍需保证可读性 */
+}
+```
+
+## 错误预防 🛡️
+
+### 防御性CSS
+```css
+/* ✅ 防止内容溢出 */
+.link-card {
+  overflow: hidden;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* ✅ 设置合理的默认值 */
+.tree-item {
+  min-height: 40px; /* 确保可点击区域 */
+  box-sizing: border-box; /* 防止盒模型问题 */
+}
+```
+
+### 浏览器兼容性
+```css
+/* ✅ 渐进增强 */
+.link-card {
+  /* 基础样式 - 所有浏览器支持 */
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+/* 现代浏览器增强 */
+@supports (display: grid) {
+  .links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+}
+```
+
+## 团队协作规范 👥
+
+### 代码审查清单
+- [ ] 是否使用了CSS变量？
+- [ ] 类名是否语义化？
+- [ ] 是否遵循BEM命名规范？
+- [ ] 响应式断点是否合理？
+- [ ] 是否有性能问题？
+- [ ] 浏览器兼容性如何？
+- [ ] 可访问性是否考虑？
+
+### 提交前检查
+```css
+/* 确保以下方面都已检查 */
+/* 1. 去除无用的CSS */
+/* 2. 合并重复的样式 */
+/* 3. 优化选择器性能 */
+/* 4. 添加必要的注释 */
+/* 5. 测试不同设备的显示效果 */
+```
