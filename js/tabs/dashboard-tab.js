@@ -7,7 +7,7 @@
  */
 class DashboardTab extends BaseTab {
   constructor() {
-    super('dashboard', 'Dashboard', '📊', {
+    super('dashboard', '总览', '📊', {
       showSearch: false,        // Dashboard不显示搜索栏
       supportSearch: false,     // Dashboard不支持搜索
       cache: true              // 缓存Dashboard内容
@@ -16,6 +16,9 @@ class DashboardTab extends BaseTab {
     // Dashboard特有的数据
     this.statsData = null;
     this.refreshInterval = null;
+    
+    // 卡片交互管理器
+    this.cardInteractionManager = null;
   }
   
   /**
@@ -140,7 +143,7 @@ class DashboardTab extends BaseTab {
           <h3>📊 收藏夹统计</h3>
           <p>您的收藏夹概览</p>
           <div class="stats-last-updated">
-            最后更新: ${this.formatTime(stats.lastUpdated)}
+            最后更新: ${formatTime(stats.lastUpdated)}
           </div>
         </div>
         
@@ -179,6 +182,9 @@ class DashboardTab extends BaseTab {
     
     container.appendChild(dashboard);
     
+    // 为最近活动卡片绑定交互事件
+    this.bindActivityCardEvents(dashboard);
+    
     // 确保容器可见
     container.style.display = 'block';
   }
@@ -193,15 +199,118 @@ class DashboardTab extends BaseTab {
       return '<div class="empty-stats">暂无最近活动</div>';
     }
     
-    return activities.slice(0, 5).map(activity => `
-      <div class="activity-item">
-        <div class="activity-icon">${activity.icon}</div>
-        <div class="activity-content">
-          <div class="activity-title">${activity.title}</div>
-          <div class="activity-time">${this.formatTime(activity.time)}</div>
+    // 移除 .slice(0, 5) 限制，显示全部最近活动
+    return activities.map(activity => `
+      <div class="activity-item activity-card" 
+           data-link-id="${activity.link?.id || ''}"
+           data-url="${activity.link?.url || ''}"
+           title="左键点击打开链接，右键显示更多选项">
+        <div class="activity-icon">
+          <img class="activity-icon-img" src="${activity.icon}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon()}">
         </div>
+        <div class="activity-content">
+          <div class="activity-title">${escapeHtml(activity.title)}</div>
+          <div class="activity-time">${formatTime(activity.time)}</div>
+        </div>
+        <button class="context-menu-btn" title="更多选项">⋮</button>
       </div>
     `).join('');
+  }
+  
+  /**
+   * 为最近活动卡片绑定交互事件
+   * @param {HTMLElement} dashboard - Dashboard容器元素
+   */
+  bindActivityCardEvents(dashboard) {
+    // 初始化卡片交互管理器
+    if (!this.cardInteractionManager) {
+      this.cardInteractionManager = createCardInteractionManager({
+        showNotification: this.showNotification.bind(this),
+        app: window.linkBoardApp
+      });
+    }
+    
+    // 为每个有链接数据的activity-card绑定事件
+    const activityCards = dashboard.querySelectorAll('.activity-card[data-url]:not([data-url=""])');
+    activityCards.forEach(card => {
+      const linkId = card.dataset.linkId;
+      const url = card.dataset.url;
+      
+      // 只有当有有效链接数据时才绑定事件
+      if (url) {
+        // 从statsData中获取完整的链接信息
+        const linkData = this.findLinkDataById(linkId) || {
+          id: linkId,
+          url: url,
+          title: card.querySelector('.activity-title')?.textContent || '未知链接'
+        };
+        
+        // 绑定卡片交互事件
+        this.cardInteractionManager.bindCardEvents(card, linkData, {
+          enableClick: true,
+          enableContextMenu: true,
+          enableMove: true,
+          enableDelete: true,
+          enableCopy: true,
+          enableNewWindow: true
+        });
+        
+        // 绑定图标错误处理
+        const iconImg = card.querySelector('.activity-icon-img');
+        if (iconImg) {
+          let fallbackAttempts = 0;
+          iconImg.addEventListener('error', () => {
+            fallbackAttempts++;
+            
+            if (fallbackAttempts === 1) {
+              // 第一次失败：尝试使用Google favicon服务
+              if (url) {
+                try {
+                  const domain = new URL(url).hostname;
+                  iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+                  return;
+                } catch (e) {
+                  // URL解析失败，继续下一个备用方案
+                }
+              }
+            }
+            
+            if (fallbackAttempts === 2) {
+              // 第二次失败：尝试使用DuckDuckGo favicon服务
+              if (url) {
+                try {
+                  const domain = new URL(url).hostname;
+                  iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
+                  return;
+                } catch (e) {
+                  // URL解析失败，继续下一个备用方案
+                }
+              }
+            }
+            
+            // 最终备用方案：使用默认图标
+            const fallbackUrl = iconImg.dataset.fallback;
+            if (fallbackUrl && iconImg.src !== fallbackUrl) {
+              iconImg.src = fallbackUrl;
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  /**
+   * 根据ID查找链接数据
+   * @param {string} linkId - 链接ID
+   * @returns {Object|null} 链接数据对象或null
+   */
+  findLinkDataById(linkId) {
+    if (!this.statsData || !this.statsData.recentActivity) {
+      return null;
+    }
+    
+    const activity = this.statsData.recentActivity.find(act => act.link && act.link.id === linkId);
+    return activity ? activity.link : null;
   }
   
   // ==================== 数据计算方法 ====================
@@ -247,8 +356,8 @@ class DashboardTab extends BaseTab {
         const result = bTime - aTime; // 倒序：时间戳大的(新的)在前
         
         return result;
-      })
-      .slice(0, 5);
+      });
+      // 移除 .slice(0, 5) 限制，显示全部最近活动
     
     recentLinks.forEach((link, index) => {
       const time = parseInt(link.dateAdded);
@@ -262,74 +371,13 @@ class DashboardTab extends BaseTab {
     }
     
     return recentLinks.map(link => ({
-      icon: '🔗',
+      icon: getSafeIcon(link.iconUrl, link.url), // 使用实际的链接图标
       title: `添加了收藏: ${link.title}`,
       time: new Date(parseInt(link.dateAdded)),
       link: link
     }));
   }
   
-  /**
-   * 获取文件夹图标
-   * @param {string} title - 文件夹标题
-   * @param {number} depth - 文件夹深度
-   * @returns {string}
-   */
-  getFolderIcon(title, depth) {
-    // 这里可以复用main.js中的getFolderIcon逻辑
-    if (window.linkBoardApp && typeof window.linkBoardApp.getFolderIcon === 'function') {
-      return window.linkBoardApp.getFolderIcon(title, depth);
-    }
-    
-    // 简单的默认图标逻辑
-    if (depth === 0) return '📁';
-    return '📂';
-  }
-  
-  /**
-   * 格式化时间
-   * @param {Date} date - 日期对象
-   * @returns {string}
-   */
-  formatTime(date) {
-    if (!date) return '未知时间';
-    
-    const now = new Date();
-    const diff = now - date;
-    
-    // 小于1分钟
-    if (diff < 60000) {
-      return '刚刚';
-    }
-    
-    // 小于1小时
-    if (diff < 3600000) {
-      const minutes = Math.floor(diff / 60000);
-      return `${minutes} 分钟前`;
-    }
-    
-    // 小于1天
-    if (diff < 86400000) {
-      const hours = Math.floor(diff / 3600000);
-      return `${hours} 小时前`;
-    }
-    
-    // 小于7天
-    if (diff < 604800000) {
-      const days = Math.floor(diff / 86400000);
-      return `${days} 天前`;
-    }
-    
-    // 超过7天，显示具体日期
-    return date.toLocaleDateString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-  
-  // ==================== 生命周期方法 ====================
   
   /**
    * Tab激活时调用
@@ -360,6 +408,12 @@ class DashboardTab extends BaseTab {
     // 清理资源
     this.clearAutoRefresh();
     this.statsData = null;
+    
+    // 清理卡片交互管理器
+    if (this.cardInteractionManager) {
+      this.cardInteractionManager.destroy();
+      this.cardInteractionManager = null;
+    }
   }
   
   /**
@@ -398,7 +452,6 @@ class DashboardTab extends BaseTab {
         
         // 如果容器存在，重新渲染
         if (this.container) {
-          this.container.innerHTML = '';
           this.renderStatsPanel(this.container);
         }
         

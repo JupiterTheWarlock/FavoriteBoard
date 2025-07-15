@@ -339,7 +339,3 @@ updateMultipleElements(data) {
   this.container.appendChild(fragment);
 }
 ```
-
----
-
-> 🐱 **小贴士**: 这些规范旨在确保代码的可维护性、可扩展性和团队协作效率喵～

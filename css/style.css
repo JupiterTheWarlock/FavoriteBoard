@@ -409,7 +409,7 @@ body {
 
 /* 分类信息样式 */
 .category-info {
-  margin-bottom: 2rem;
+  margin-bottom: 1rem; /* 从2rem减少到1rem，缩小与tab内容的间距 */
 }
 
 .category-title {
@@ -428,6 +428,152 @@ body {
 .link-count {
   color: var(--text-light);
   font-size: 0.9rem;
+}
+
+/* 最近活动样式 - 已移动到dashboard容器样式部分 */
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  padding: 0.875rem;
+  background: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  animation: fadeInUp 0.3s ease-out forwards;
+  opacity: 0;
+  position: relative; /* 为绝对定位的按钮提供参考 */
+  cursor: pointer; /* 添加点击手势 */
+  flex-shrink: 0; /* 防止在滚动容器中被压缩 */
+}
+
+.activity-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-color: var(--primary-color);
+}
+
+/* 最近活动条目中的更多选项按钮 */
+.activity-item .context-menu-btn {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0;
+  flex-shrink: 0;
+  line-height: 1;
+  font-weight: bold;
+  margin-left: auto; /* 推到右边 */
+}
+
+.activity-item:hover .context-menu-btn {
+  opacity: 1;
+}
+
+.activity-item .context-menu-btn:hover {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transform: scale(1.1);
+}
+
+.activity-item .context-menu-btn:active {
+  background-color: var(--border-color);
+  transform: scale(0.95);
+}
+
+.activity-icon-container {
+  width: 32px;
+  height: 32px;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activity-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  transition: opacity 0.3s ease;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0; /* 确保内容可以正确截断 */
+}
+
+.activity-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-color);
+  margin: 0 0 0.25rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.activity-domain {
+  font-weight: 500;
+}
+
+.activity-domain::after {
+  content: "•";
+  margin-left: 0.5rem;
+  opacity: 0.5;
+}
+
+.activity-time {
+  font-style: italic;
+}
+
+/* 最近活动动画延迟 */
+.activity-item:nth-child(1) { animation-delay: 0.1s; }
+.activity-item:nth-child(2) { animation-delay: 0.15s; }
+.activity-item:nth-child(3) { animation-delay: 0.2s; }
+.activity-item:nth-child(4) { animation-delay: 0.25s; }
+.activity-item:nth-child(5) { animation-delay: 0.3s; }
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .activity-item {
+    padding: 0.75rem;
+  }
+  
+  .activity-icon-container {
+    width: 28px;
+    height: 28px;
+    margin-right: 0.5rem;
+  }
+  
+  .activity-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .activity-title {
+    font-size: 0.9rem;
+  }
+  
+  .activity-meta {
+    font-size: 0.75rem;
+  }
 }
 
 /* 链接网格样式 */
@@ -1609,7 +1755,99 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
 /* Dashboard容器样式 */
 .dashboard-container {
   width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: 10px 0;
+  overflow: hidden; /* 防止整个容器滚动 */
+}
+
+/* Dashboard统计区域 - 固定高度 */
+.dashboard-stats:first-child {
+  flex-shrink: 0; /* 不收缩 */
+  margin-bottom: 1rem; /* 减少底部间距 */
+}
+
+/* 最近活动区域 - 自适应剩余高度 */
+.dashboard-stats:last-child {
+  flex: 1; /* 占据剩余空间 */
+  margin-bottom: 0; /* 去除底部间距 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止卡片本身滚动 */
+}
+
+/* 最近活动容器 - 可滚动 */
+.recent-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1; /* 占据父容器剩余空间 */
+  overflow-y: auto; /* 添加垂直滚动条 */
+  padding-right: 0.5rem; /* 为滚动条留出空间 */
+  margin-right: -0.5rem; /* 抵消内边距，保持对齐 */
+}
+
+/* 滚动条样式优化 */
+.recent-activity::-webkit-scrollbar {
+  width: 6px;
+}
+
+.recent-activity::-webkit-scrollbar-track {
+  background: var(--bg-color);
+  border-radius: 3px;
+}
+
+.recent-activity::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.recent-activity::-webkit-scrollbar-thumb:hover {
+  background: var(--text-light);
+}
+
+/* 活动图标样式 */
+.activity-icon {
+  flex-shrink: 0;
+  margin-right: 0.75rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+}
+
+.activity-icon-img {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+/* 活动内容区域 */
+.activity-content {
+  flex: 1;
+  min-width: 0; /* 允许内容收缩 */
+}
+
+.activity-title {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  line-height: 1.4;
+  /* 长文本处理 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-time {
+  color: var(--text-light);
+  font-size: 0.85rem;
 }
 
 /* Bookmark Tab内容样式 */
@@ -1621,7 +1859,7 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
 /* 确保链接网格容器正确显示 */
 .links-grid-container {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 0.5rem; /* 减少上边距，与分类信息间距协调 */
 }
 
 /* 确保主内容区域正确显示Tab内容 */

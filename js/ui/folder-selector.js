@@ -49,7 +49,7 @@ class FolderSelector {
         isExpanded: true, // 强制全部展开
         isDisabled: isDisabled, // 标记禁用状态
         children: [],
-        icon: node.icon || this.getFolderIcon(node.title) // 确保有图标
+        icon: node.icon || getFolderIcon(node.title) // 确保有图标
       };
       
       // 递归处理子节点
@@ -152,7 +152,7 @@ class FolderSelector {
     item.innerHTML = `
       <div class="folder-selector-content">
         <span class="folder-selector-icon">${node.icon}</span>
-        <span class="folder-selector-title">${this.escapeHtml(node.title)}</span>
+        <span class="folder-selector-title">${escapeHtml(node.title)}</span>
         ${this.options.showBookmarkCount ? 
           `<span class="folder-selector-count">${node.bookmarkCount || 0}</span>` : 
           ''
@@ -281,52 +281,6 @@ class FolderSelector {
     return folderId === '0' || folderId === 'root';
   }
   
-  /**
-   * 获取文件夹图标
-   * @param {string} title - 文件夹标题
-   * @returns {string} 图标
-   */
-  getFolderIcon(title) {
-    if (!title) return '📁';
-    
-    const titleLower = title.toLowerCase();
-    
-    // 特殊文件夹图标映射
-    const iconMap = {
-      '工作': '💼', 'work': '💼',
-      '学习': '📚', 'study': '📚', 'education': '📚',
-      '娱乐': '🎮', 'entertainment': '🎮', 'games': '🎮',
-      '社交': '💬', 'social': '💬', 'communication': '💬',
-      '购物': '🛒', 'shopping': '🛒',
-      '新闻': '📰', 'news': '📰',
-      '技术': '⚙️', 'tech': '⚙️', 'technology': '⚙️',
-      '设计': '🎨', 'design': '🎨',
-      '音乐': '🎵', 'music': '🎵',
-      '视频': '🎬', 'video': '🎬', 'movies': '🎬',
-      '旅游': '✈️', 'travel': '✈️',
-      '美食': '🍕', 'food': '🍕'
-    };
-    
-    for (const [keyword, icon] of Object.entries(iconMap)) {
-      if (titleLower.includes(keyword)) {
-        return icon;
-      }
-    }
-    
-    return '📁';
-  }
-  
-  /**
-   * 转义HTML字符
-   * @param {string} text - 文本
-   * @returns {string} 转义后的文本
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
   
   /**
    * 设置选择回调函数

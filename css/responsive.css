@@ -79,9 +79,49 @@
   }
   
   /* DashBoard移动端适配 */
+  .dashboard-container {
+    height: calc(100vh - 80px); /* 考虑到移动端可能的工具栏高度 */
+  }
+  
   .dashboard-stats {
     padding: 1.5rem;
     margin-bottom: 1.5rem;
+  }
+  
+  .dashboard-stats:first-child {
+    margin-bottom: 1rem;
+  }
+  
+  .dashboard-stats:last-child {
+    margin-bottom: 0;
+  }
+  
+  .recent-activity {
+    padding-right: 0.25rem;
+    margin-right: -0.25rem;
+  }
+  
+  .activity-item {
+    padding: 0.75rem;
+  }
+  
+  .activity-icon {
+    width: 28px;
+    height: 28px;
+    margin-right: 0.5rem;
+  }
+  
+  .activity-icon-img {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .activity-title {
+    font-size: 0.9rem;
+  }
+  
+  .activity-time {
+    font-size: 0.8rem;
   }
   
   .stats-grid {
@@ -124,7 +164,7 @@
   }
   
   .category-info {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem; /* 保持与桌面端一致的间距 */
   }
   
   .link-card {

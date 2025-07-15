@@ -560,5 +560,3 @@ const uiHandler = new UIEventHandler();
 
 bookmarkHandler.setNext(uiHandler);
 ```
-
----

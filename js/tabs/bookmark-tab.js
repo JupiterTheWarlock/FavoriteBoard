@@ -20,14 +20,13 @@ class BookmarkTab extends BaseTab {
     this.filteredLinks = [];
     this.searchQuery = '';
     
-    // 右键菜单状态
-    this.currentContextMenu = null;
-    this.currentBookmarkForContext = null;
+    // 卡片交互管理器
+    this.cardInteractionManager = null;
     
     // 更新Tab标题
     if (folderData) {
       this.title = folderData.title || '收藏夹';
-      this.icon = this.getFolderIcon(folderData.title);
+      this.icon = getFolderIcon(folderData.title);
     }
     
     console.log(`🐱 创建收藏夹Tab: ${this.folderId} - ${this.title}`);
@@ -93,13 +92,13 @@ class BookmarkTab extends BaseTab {
       
       // 根据文件夹ID获取链接数据
       if (this.folderId === 'all') {
-        // 显示所有书签
+        // 显示所有收藏
         this.currentLinks = [...allLinks];
       } else if (this.folderId) {
-        // 显示特定文件夹的书签
+        // 显示特定文件夹的收藏
         this.currentLinks = this.getLinksForFolder(stateManager, this.folderId);
       } else {
-        // 默认显示所有书签
+        // 默认显示所有收藏
         this.currentLinks = [...allLinks];
       }
       
@@ -177,8 +176,8 @@ class BookmarkTab extends BaseTab {
     
     // 如果没有链接，显示空状态
     if (this.filteredLinks.length === 0) {
-      const emptyState = this.createEmptyState(
-        this.searchQuery ? `没有找到包含 "${this.searchQuery}" 的链接` : '此文件夹没有书签',
+      const emptyState = createEmptyState(
+        this.searchQuery ? `没有找到包含 "${this.searchQuery}" 的链接` : '此文件夹没有收藏',
         this.searchQuery ? '🔍' : '📭'
       );
       gridContainer.appendChild(emptyState);
@@ -212,16 +211,16 @@ class BookmarkTab extends BaseTab {
     card.dataset.url = link.url;
     
     // 获取安全的图标URL
-    const iconUrl = this.getSafeIcon(link.iconUrl, link.url);
+    const iconUrl = getSafeIcon(link.iconUrl, link.url);
     
     card.innerHTML = `
       <div class="card-header">
-        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" data-fallback="${this.getDefaultIcon()}">
-        <h3 class="card-title" title="${this.escapeHtml(link.title)}">${this.escapeHtml(link.title)}</h3>
+        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon()}">
+        <h3 class="card-title" title="${escapeHtml(link.title)}">${escapeHtml(link.title)}</h3>
         <button class="context-menu-btn" title="更多选项">⋮</button>
       </div>
       <div class="card-description">
-        <span class="link-url" title="${this.escapeHtml(link.url)}">${this.escapeHtml(this.getDomainFromUrl(link.url))}</span>
+        <span class="link-url" title="${escapeHtml(link.url)}">${escapeHtml(getDomainFromUrl(link.url))}</span>
       </div>
     `;
     
@@ -278,43 +277,30 @@ class BookmarkTab extends BaseTab {
    * @param {Object} link - 链接对象
    */
   bindCardEvents(card, link) {
-    // 点击打开链接
-    card.addEventListener('click', (e) => {
-      // 如果点击的是上下文菜单按钮，不打开链接
-      if (e.target.closest('.context-menu-btn')) {
-        return;
-      }
-      
-      // 打开链接
-      chrome.tabs.create({ url: link.url });
-    });
-    
-    // 右键菜单
-    card.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      this.showContextMenu(e, link, card);
-    });
-    
-    // 上下文菜单按钮
-    const contextBtn = card.querySelector('.context-menu-btn');
-    if (contextBtn) {
-      contextBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.showContextMenu(e, link, card);
+    // 初始化卡片交互管理器（如果还没有的话）
+    if (!this.cardInteractionManager) {
+      this.cardInteractionManager = createCardInteractionManager({
+        showNotification: this.showNotification.bind(this),
+        app: window.linkBoardApp,
+        onMoveRequested: this.showMoveToFolderDialog.bind(this),
+        onDeleteRequested: this.showDeleteConfirmation.bind(this)
       });
     }
+    
+    // 使用卡片交互管理器绑定事件
+    this.cardInteractionManager.bindCardEvents(card, link, {
+      enableClick: true,
+      enableContextMenu: true,
+      onMoveRequested: this.showMoveToFolderDialog.bind(this),
+      onDeleteRequested: this.showDeleteConfirmation.bind(this)
+    });
   }
   
   /**
    * 绑定收藏夹事件
    */
   bindBookmarkEvents() {
-    // 点击空白处隐藏上下文菜单
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.context-menu')) {
-        this.hideContextMenu();
-      }
-    });
+    // 卡片交互管理器会自动处理全局事件
   }
   
   // ==================== 搜索和筛选方法 ====================
@@ -347,7 +333,7 @@ class BookmarkTab extends BaseTab {
       this.filteredLinks = this.currentLinks.filter(link => {
         return link.title.toLowerCase().includes(this.searchQuery) ||
                link.url.toLowerCase().includes(this.searchQuery) ||
-               this.getDomainFromUrl(link.url).toLowerCase().includes(this.searchQuery);
+               getDomainFromUrl(link.url).toLowerCase().includes(this.searchQuery);
       });
     }
     
@@ -355,242 +341,8 @@ class BookmarkTab extends BaseTab {
   }
   
   // ==================== 右键菜单相关方法 ====================
+  // （这些方法已移动到 CardInteractionManager 中）
   
-  /**
-   * 智能定位菜单位置（使用通用工具函数）
-   * @param {Event} event - 鼠标事件
-   * @param {HTMLElement} menu - 菜单元素
-   * @returns {Object} 包含left和top的位置对象
-   */
-  calculateMenuPosition(event, menu) {
-    return calculateSmartMenuPosition(event, menu, {
-      margin: 10,
-      preferRight: true,
-      preferBottom: true
-    });
-  }
-  
-  /**
-   * 显示右键菜单
-   * @param {Event} event - 鼠标事件
-   * @param {Object} link - 链接对象
-   * @param {HTMLElement} card - 卡片元素
-   */
-  showContextMenu(event, link, card) {
-    // 隐藏之前的菜单
-    this.hideContextMenu();
-    
-    this.currentBookmarkForContext = link;
-    
-    // 创建菜单
-    const menu = document.createElement('div');
-    menu.className = 'context-menu show';
-    menu.innerHTML = `
-      <div class="context-menu-item" data-action="openNewWindow">
-        <span class="icon">📄</span>
-        <span class="menu-text">在新窗口打开</span>
-      </div>
-      <div class="context-menu-item" data-action="copy">
-        <span class="icon">📋</span>
-        <span class="menu-text">复制链接</span>
-      </div>
-      <div class="context-menu-separator"></div>
-      <div class="context-menu-item" data-action="move">
-        <span class="icon">📁</span>
-        <span class="menu-text">移动到文件夹</span>
-      </div>
-      <div class="context-menu-item danger" data-action="delete">
-        <span class="icon">🗑️</span>
-        <span class="menu-text">删除书签</span>
-      </div>
-    `;
-    
-    // 智能定位菜单
-    const position = this.calculateMenuPosition(event, menu);
-    
-    // 设置菜单样式和位置
-    menu.style.position = 'fixed';
-    menu.style.left = position.left + 'px';
-    menu.style.top = position.top + 'px';
-    menu.style.zIndex = '10000';
-    
-    document.body.appendChild(menu);
-    this.currentContextMenu = menu;
-    
-    // 绑定菜单事件
-    this.bindContextMenuEvents(menu, link, card);
-    
-    console.log('🐱 显示右键菜单，位置:', position);
-  }
-  
-  /**
-   * 绑定右键菜单事件
-   * @param {HTMLElement} menu - 菜单元素
-   * @param {Object} link - 链接对象
-   * @param {HTMLElement} card - 卡片元素
-   */
-  bindContextMenuEvents(menu, link, card) {
-    const handleMenuClick = (e) => {
-      const action = e.target.closest('.context-menu-item')?.dataset.action;
-      if (!action) return;
-      
-      e.stopPropagation();
-      
-      switch (action) {
-        case 'openNewWindow':
-          chrome.windows.create({ url: link.url });
-          break;
-        case 'copy':
-          copyToClipboard(link.url);
-          this.showNotification('链接已复制到剪贴板', 'success');
-          break;
-        case 'move':
-          this.showMoveToFolderDialog(link);
-          break;
-        case 'delete':
-          this.showDeleteConfirmation(link, card);
-          break;
-      }
-      
-      this.hideContextMenu();
-    };
-    
-    menu.addEventListener('click', handleMenuClick);
-  }
-  
-  /**
-   * 隐藏右键菜单
-   */
-  hideContextMenu() {
-    if (this.currentContextMenu) {
-      document.body.removeChild(this.currentContextMenu);
-      this.currentContextMenu = null;
-      this.currentBookmarkForContext = null;
-    }
-  }
-  
-  // ==================== 工具方法 ====================
-  
-  /**
-   * 获取文件夹图标
-   * @param {string} title - 文件夹标题
-   * @returns {string}
-   */
-  getFolderIcon(title) {
-    if (!title) return '📁';
-    
-    const titleLower = title.toLowerCase();
-    
-    // 特殊文件夹图标映射
-    const iconMap = {
-      '工作': '💼', 'work': '💼',
-      '学习': '📚', 'study': '📚', 'education': '📚',
-      '娱乐': '🎮', 'entertainment': '🎮', 'games': '🎮',
-      '社交': '💬', 'social': '💬', 'communication': '💬',
-      '购物': '🛒', 'shopping': '🛒',
-      '新闻': '📰', 'news': '📰',
-      '技术': '⚙️', 'tech': '⚙️', 'technology': '⚙️',
-      '设计': '🎨', 'design': '🎨',
-      '音乐': '🎵', 'music': '🎵',
-      '视频': '🎬', 'video': '🎬', 'movies': '🎬',
-      '旅游': '✈️', 'travel': '✈️',
-      '美食': '🍕', 'food': '🍕'
-    };
-    
-    for (const [keyword, icon] of Object.entries(iconMap)) {
-      if (titleLower.includes(keyword)) {
-        return icon;
-      }
-    }
-    
-    return '📁';
-  }
-  
-  /**
-   * 获取默认图标
-   * @returns {string}
-   */
-  getDefaultIcon() {
-    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiByeD0iMiIgZmlsbD0iIzMzNzNkYyIvPgo8cGF0aCBkPSJNOCA0SDEyVjEySDhWNFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik00IDRIOFYxMkg0VjRaIiBmaWxsPSJ3aGl0ZSIgZmlsbC1vcGFjaXR5PSIwLjciLz4KPC9zdmc+';
-  }
-  
-  /**
-   * 获取安全的图标URL
-   * @param {string} iconUrl - 原始图标URL
-   * @param {string} websiteUrl - 网站URL
-   * @returns {string}
-   */
-  getSafeIcon(iconUrl, websiteUrl = null) {
-    // 优先级1: 如果有有效的图标URL，使用它
-    if (iconUrl && this.isValidIconUrl(iconUrl)) {
-      return iconUrl;
-    }
-    
-    // 优先级2: 尝试从网站URL生成favicon
-    if (websiteUrl) {
-      try {
-        const domain = new URL(websiteUrl).hostname;
-        // 使用多个favicon服务作为备用
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-      } catch (e) {
-        console.warn('无法解析网站URL生成favicon:', websiteUrl);
-      }
-    }
-    
-    // 优先级3: 使用默认图标
-    return this.getDefaultIcon();
-  }
-  
-  /**
-   * 检查图标URL是否有效
-   * @param {string} iconUrl - 图标URL
-   * @returns {boolean}
-   */
-  isValidIconUrl(iconUrl) {
-    if (!iconUrl || typeof iconUrl !== 'string') return false;
-    
-    try {
-      // 检查是否是data URL
-      if (iconUrl.startsWith('data:')) return true;
-      
-      // 检查是否是有效的HTTP/HTTPS URL
-      const url = new URL(iconUrl);
-      return url.protocol === 'http:' || url.protocol === 'https:';
-    } catch (e) {
-      return false;
-    }
-  }
-  
-  /**
-   * 从URL获取域名
-   * @param {string} url - URL
-   * @returns {string}
-   */
-  getDomainFromUrl(url) {
-    try {
-      return new URL(url).hostname;
-    } catch (e) {
-      return url;
-    }
-  }
-  
-  /**
-   * 转义HTML字符
-   * @param {string} text - 文本
-   * @returns {string}
-   */
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-  
-  // copyToClipboard 方法已移除 - 请使用 dom-utils.js 中的 copyToClipboard 函数
-  
-  // TODO: 实现移动和删除相关方法
-  // showMoveToFolderDialog, showDeleteConfirmation 等
-  // 这些方法比较复杂，需要在后续实现
   
   /**
    * 显示移动到文件夹对话框
@@ -634,14 +386,14 @@ class BookmarkTab extends BaseTab {
     // 构建对话框HTML
     dialogElement.innerHTML = `
       <div class="dialog-header">
-        <h3 class="dialog-title">移动书签</h3>
+        <h3 class="dialog-title">移动收藏</h3>
         <button class="dialog-close" title="关闭">×</button>
       </div>
       <div class="dialog-body">
         <div class="move-dialog-info">
           <div class="move-dialog-bookmark">
-            <img class="move-dialog-icon" src="${this.getSafeIcon(link.iconUrl, link.url)}" alt="icon">
-            <span class="move-dialog-title">${this.escapeHtml(link.title)}</span>
+            <img class="move-dialog-icon" src="${getSafeIcon(link.iconUrl, link.url)}" alt="icon">
+            <span class="move-dialog-title">${escapeHtml(link.title)}</span>
           </div>
           <p class="move-dialog-message">选择要移动到的文件夹：</p>
         </div>
@@ -799,14 +551,14 @@ class BookmarkTab extends BaseTab {
   }
   
   /**
-   * 执行移动书签操作
+   * 执行移动收藏操作
    * @param {Object} link - 链接对象
    * @param {string} targetFolderId - 目标文件夹ID
    * @param {Object} dialog - 对话框对象
    */
   async executeMoveBookmark(link, targetFolderId, dialog) {
     try {
-      console.log(`📁 移动书签: ${link.title} → ${targetFolderId}`);
+      console.log(`📁 移动收藏: ${link.title} → ${targetFolderId}`);
       
       // 显示加载状态
       const confirmBtn = dialog.dialogElement.querySelector('.dialog-btn-confirm');
@@ -817,7 +569,7 @@ class BookmarkTab extends BaseTab {
       // 获取应用实例
       const app = window.linkBoardApp;
       if (!app || !app.bookmarkManager) {
-        throw new Error('书签管理器不可用');
+        throw new Error('收藏管理器不可用');
       }
       
       // 执行移动操作
@@ -825,7 +577,7 @@ class BookmarkTab extends BaseTab {
       
       if (success) {
         // 移动成功
-        this.showNotification(`书签已移动到新文件夹`, 'success');
+        this.showNotification(`收藏已移动到新文件夹`, 'success');
         
         // 关闭对话框
         dialog.hide();
@@ -837,7 +589,7 @@ class BookmarkTab extends BaseTab {
       }
       
     } catch (error) {
-      console.error('❌ 移动书签失败:', error);
+      console.error('❌ 移动收藏失败:', error);
       this.showNotification(`移动失败: ${error.message}`, 'error');
       
       // 恢复按钮状态
@@ -866,8 +618,8 @@ class BookmarkTab extends BaseTab {
       
       // 创建删除确认对话框
       const deleteDialog = app.dialogManager.create({
-        title: '删除书签',
-        message: `确定要删除书签"${link.title}"吗？`,
+        title: '删除收藏',
+        message: `确定要删除收藏"${link.title}"吗？`,
         warning: '此操作不可撤销',
         confirmText: '删除',
         cancelText: '取消',
@@ -890,19 +642,19 @@ class BookmarkTab extends BaseTab {
   }
   
   /**
-   * 执行删除书签操作
+   * 执行删除收藏操作
    * @param {Object} link - 链接对象
    * @param {HTMLElement} card - 卡片元素
    * @returns {boolean} 是否关闭对话框
    */
   async executeDeleteBookmark(link, card) {
     try {
-      console.log(`🗑️ 删除书签: ${link.title}`);
+      console.log(`🗑️ 删除收藏: ${link.title}`);
       
       // 获取应用实例
       const app = window.linkBoardApp;
       if (!app || !app.bookmarkManager) {
-        throw new Error('书签管理器不可用');
+        throw new Error('收藏管理器不可用');
       }
       
       // 执行删除操作
@@ -910,7 +662,7 @@ class BookmarkTab extends BaseTab {
       
       if (success) {
         // 删除成功
-        this.showNotification(`书签"${link.title}"已删除`, 'success');
+        this.showNotification(`收藏"${link.title}"已删除`, 'success');
         
         // 从界面中移除卡片元素
         if (card && card.parentNode) {
@@ -944,7 +696,7 @@ class BookmarkTab extends BaseTab {
       }
       
     } catch (error) {
-      console.error('❌ 删除书签失败:', error);
+      console.error('❌ 删除收藏失败:', error);
       this.showNotification(`删除失败: ${error.message}`, 'error');
       
       // 返回false表示不关闭对话框
@@ -971,7 +723,9 @@ class BookmarkTab extends BaseTab {
     super.onDeactivate();
     
     // 隐藏右键菜单
-    this.hideContextMenu();
+    if (this.cardInteractionManager) {
+      this.cardInteractionManager.hideContextMenu();
+    }
   }
   
   /**
@@ -1019,6 +773,19 @@ class BookmarkTab extends BaseTab {
           linkCount: this.currentLinks.length
         });
       });
+    }
+  }
+  
+  /**
+   * Tab销毁时调用
+   */
+  destroy() {
+    super.destroy();
+    
+    // 清理卡片交互管理器
+    if (this.cardInteractionManager) {
+      this.cardInteractionManager.destroy();
+      this.cardInteractionManager = null;
     }
   }
 }
