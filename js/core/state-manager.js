@@ -527,8 +527,8 @@ class StateManager {
       return true;
     }
     
-    // 跳过指定的属性模式
-    return skipPatterns.some(pattern => key.toLowerCase().includes(pattern.toLowerCase()));
+    // 跳过指定的属性（精确匹配，避免误跳过如parentId等属性）
+    return skipPatterns.includes(key);
   }
   
   /**
