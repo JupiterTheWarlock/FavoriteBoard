@@ -446,7 +446,7 @@ class BookmarkTab extends BaseTab {
           chrome.tabs.create({ url: link.url });
           break;
         case 'copy':
-          this.copyToClipboard(link.url);
+          copyToClipboard(link.url);
           this.showNotification('链接已复制到剪贴板', 'success');
           break;
         case 'move':
@@ -591,32 +591,7 @@ class BookmarkTab extends BaseTab {
     return div.innerHTML;
   }
   
-  /**
-   * 复制到剪贴板
-   * @param {string} text - 要复制的文本
-   */
-  async copyToClipboard(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        // 降级方案
-        const textArea = document.createElement('textarea');
-        textArea.value = text;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
-      }
-    } catch (err) {
-      console.error('复制到剪贴板失败:', err);
-      throw err;
-    }
-  }
+  // copyToClipboard 方法已移除 - 请使用 dom-utils.js 中的 copyToClipboard 函数
   
   // TODO: 实现移动和删除相关方法
   // showMoveToFolderDialog, showDeleteConfirmation 等

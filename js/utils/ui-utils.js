@@ -1,18 +1,6 @@
 // UI工具函数
 
-/**
- * 获取网站favicon URL
- * @param {string} url - 网站URL
- * @returns {string} favicon URL
- */
-function getFaviconUrl(url) {
-    try {
-        const domain = new URL(url);
-        return `${domain.protocol}//${domain.hostname}/favicon.ico`;
-    } catch (e) {
-        return getDefaultLinkIcon();
-    }
-}
+// getFaviconUrl 函数已删除 - 未在项目中使用
 
 /**
  * 获取默认链接图标
@@ -59,43 +47,9 @@ function getSafeIconUrl(iconUrl, fallbackUrl = null) {
     return getDefaultLinkIcon();
 }
 
-/**
- * 显示通知消息
- * @param {string} message - 通知内容
- * @param {string} type - 通知类型: 'info', 'success', 'warning', 'error'
- * @param {number} duration - 显示时长（毫秒）
- */
-function showNotification(message, type = 'info', duration = 3000) {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('slide-out');
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, duration);
-}
+// showNotification 函数已移除 - 请使用 NotificationManager 或通过 UIManager.showNotification()
 
-/**
- * 检测设备类型
- * @returns {string} 设备类型: 'desktop', 'tablet', 'mobile'
- */
-function getDeviceType() {
-    const ua = navigator.userAgent;
-    if (/(tablet|ipad|playbook|silk)|(android(?!.*mobi))/i.test(ua)) {
-        return 'tablet';
-    }
-    if (/Mobile|iP(hone|od)|Android|BlackBerry|IEMobile|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(ua)) {
-        return 'mobile';
-    }
-    return 'desktop';
-}
+// getDeviceType 函数已删除 - 未在项目中使用
 
 /**
  * 智能定位菜单位置工具函数

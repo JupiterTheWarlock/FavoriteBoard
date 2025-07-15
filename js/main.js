@@ -1,9 +1,10 @@
 // FavoriteBoard Plugin - 主应用程序
-// Tab容器管理器 - 重构后的简化版本
+// 应用容器/协调器 - 重构后的模块化架构
 
 /**
  * ToolboxApp - 主应用程序
- * 负责协调各个子系统，实现更清晰的职责划分
+ * 负责协调各个子系统，实现清晰的模块化架构
+ * 符合SOLID原则，实现单一职责、松耦合的设计
  */
 class ToolboxApp {
   constructor() {
@@ -14,16 +15,9 @@ class ToolboxApp {
     
     // Tab管理相关
     this.tabContainer = null;  // Tab容器
-    this.tabFactory = null;
-    this.currentTab = null;
-    this.registeredTabs = new Map();
     
     // 数据管理
     this.bookmarkManager = new BookmarkManager();
-    this.allLinks = [];
-    this.folderTree = [];
-    this.folderMap = new Map();
-    this.isLoading = true;
     
     // UI元素缓存
     this.searchInput = null;
@@ -123,14 +117,7 @@ class ToolboxApp {
       }
     });
     
-    // 监听UI状态变更
-    this.stateManager.subscribe(['ui.loading'], ([loading]) => {
-      if (loading) {
-        this.showLoadingState();
-      } else {
-        this.hideLoadingState();
-      }
-    });
+    // UI状态变更已由UIManager处理
     
     // 监听Tab状态变更
     this.stateManager.subscribe(['tabs.active'], ([activeTab]) => {
@@ -138,9 +125,9 @@ class ToolboxApp {
       this.updateSearchBarVisibility();
       
       // 更新文件夹树选择状态
-      if (activeTab) {
+      if (activeTab && this.uiManager) {
         const [type, instanceId] = activeTab.split(':');
-        this.updateFolderTreeSelection(type, instanceId);
+        this.uiManager.updateFolderTreeSelection(type, instanceId);
       }
     });
     
@@ -158,11 +145,6 @@ class ToolboxApp {
     
     console.log('🔗 初始化事件总线监听器...');
     
-    // 监听通知请求事件
-    this.eventBus.on('notification-requested', (data) => {
-      this.showNotification(data.message, data.type);
-    }, { unique: true });
-    
     // 监听Tab切换完成事件
     this.eventBus.on('tab-switched', (data) => {
       // 更新UI状态
@@ -172,18 +154,6 @@ class ToolboxApp {
     // 监听数据刷新请求事件
     this.eventBus.on('data-refresh-requested', () => {
       this.refreshFolderTree();
-    }, { unique: true });
-    
-    // 监听搜索查询变化事件
-    this.eventBus.on('search-query-changed', (query) => {
-      // 这里可以添加全局搜索处理逻辑
-      console.log('🔍 搜索查询变化:', query);
-    }, { unique: true });
-    
-    // 监听窗口大小变化事件
-    this.eventBus.on('window-resized', () => {
-      // 处理窗口大小变化
-      console.log('📏 窗口大小变化');
     }, { unique: true });
     
     // 监听文件夹点击事件
@@ -263,7 +233,7 @@ class ToolboxApp {
     } catch (error) {
       console.error('❌ 主应用初始化失败:', error);
       this.stateManager.setUIState({ loading: false }, 'app-init');
-      this.showErrorState(error);
+      // 错误状态显示已由UIManager处理
     }
   }
   
@@ -508,7 +478,7 @@ class ToolboxApp {
   bindWindowEvents() {
     // 窗口大小变化
     window.addEventListener('resize', () => {
-      // 发布窗口大小变化事件
+      // 发布窗口大小变化事件（UIManager会处理）
       if (this.eventBus) {
         this.eventBus.emit('window-resized');
       }
@@ -566,11 +536,7 @@ class ToolboxApp {
     // 转发搜索事件到当前Tab
     activeTab.onSearch(query);
     
-    // 更新清空按钮显示状态
-    const clearBtn = document.getElementById('clearSearch');
-    if (clearBtn) {
-      clearBtn.style.display = query ? 'block' : 'none';
-    }
+    // 清空按钮状态更新已由UIManager处理
   }
   
   /**
@@ -586,14 +552,6 @@ class ToolboxApp {
   // ==================== 数据管理方法 ====================
   
   /**
-   * 加载收藏夹数据
-   */
-
-  
-  /**
-   * 从收藏夹数据生成文件夹树
-   */
-  /**
    * 获取文件夹及其子文件夹的ID
    * @param {string} folderId - 文件夹ID
    * @returns {Array} 文件夹ID数组
@@ -603,11 +561,7 @@ class ToolboxApp {
     return DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
   }
   
-  // ==================== 文件夹树渲染 (已移至SidebarManager) ====================
-  
-  // ==================== 文件夹右键菜单 (已移至ContextMenuManager) ====================
-  
-  // 旧的文件夹右键菜单处理代码已移除，现在使用 SidebarManager + ContextMenuManager 架构
+  // 文件夹树渲染和右键菜单功能已移至对应的Manager
 
   // ==================== 工具方法 ====================
   
@@ -630,46 +584,7 @@ class ToolboxApp {
     }
   }
   
-  /**
-   * 保存文件夹展开状态
-   * @returns {Set} 展开的文件夹ID集合
-   */
-  saveFolderExpandedStates() {
-    const expandedIds = new Set();
-    
-    const traverseTree = (nodes) => {
-      nodes.forEach(node => {
-        if (node.isExpanded) {
-          expandedIds.add(node.id);
-        }
-        if (node.children && node.children.length > 0) {
-          traverseTree(node.children);
-        }
-      });
-    };
-    
-    traverseTree(this.folderTree);
-    return expandedIds;
-  }
-  
-  /**
-   * 恢复文件夹展开状态
-   * @param {Set} expandedIds - 展开的文件夹ID集合
-   */
-  restoreFolderExpandedStates(expandedIds) {
-    const traverseTree = (nodes) => {
-      nodes.forEach(node => {
-        if (expandedIds.has(node.id)) {
-          node.isExpanded = true;
-        }
-        if (node.children && node.children.length > 0) {
-          traverseTree(node.children);
-        }
-      });
-    };
-    
-    traverseTree(this.folderTree);
-  }
+  // 文件夹展开状态管理已移至SidebarManager
   
   /**
    * 处理收藏夹更新
@@ -680,30 +595,24 @@ class ToolboxApp {
     try {
       // 保存当前状态
       const currentTab = this.stateManager.getStateValue('tabs.active');
-      const expandedIds = this.saveFolderExpandedStates();
+      // 文件夹展开状态管理已移至SidebarManager
       
       // 重新加载并处理数据
       await this.loadAndProcessBookmarksData();
       
-      // 恢复展开状态
-      this.restoreFolderExpandedStates(expandedIds);
+      // 文件夹状态恢复已移至SidebarManager
       
       // 恢复选中状态
-      if (currentTab) {
+      if (currentTab && this.uiManager) {
         const [type, instanceId] = currentTab.split(':');
-        this.updateFolderTreeSelection(type, instanceId);
+        this.uiManager.updateFolderTreeSelection(type, instanceId);
       }
       
-      // 通知当前Tab数据更新
-      const currentTabInstance = currentTab ? this.localRegisteredTabs?.get(currentTab) : null;
-      
-      if (currentTabInstance && currentTabInstance.onDataUpdate) {
-        const dataState = this.stateManager.getDataState();
-        currentTabInstance.onDataUpdate(action, {
-          allLinks: dataState.allLinks,
-          folderTree: dataState.folderTree
-        });
-      }
+      // 通知当前Tab数据更新（已由事件总线处理）
+      this.eventBus.emit('data-updated', {
+        action,
+        data: this.stateManager.getDataState()
+      });
       
       console.log('✅ 文件夹树更新完成');
       
@@ -711,68 +620,7 @@ class ToolboxApp {
       console.error('❌ 处理收藏夹更新失败:', error);
     }
   }
-  
-  // ==================== 状态管理 ====================
-  
-  /**
-   * 显示加载状态
-   */
-  showLoadingState() {
-    const emptyState = this.emptyState;
-    const linksGrid = this.linksGrid;
-    
-    if (emptyState && linksGrid) {
-      linksGrid.style.display = 'none';
-      emptyState.style.display = 'flex';
-      emptyState.innerHTML = `
-        <div class="loading-state">
-          <div class="loading-icon">🐱</div>
-          <div class="loading-text">正在初始化Tab系统...</div>
-        </div>
-      `;
-    }
-  }
-  
-  /**
-   * 隐藏加载状态
-   */
-  hideLoadingState() {
-    this.isLoading = false;
-    const emptyState = this.emptyState;
-    
-    if (emptyState) {
-      emptyState.style.display = 'none';
-    }
-  }
-  
-  /**
-   * 显示错误状态
-   */
-  showErrorState(error) {
-    const emptyState = this.emptyState;
-    const linksGrid = this.linksGrid;
-    
-    if (emptyState && linksGrid) {
-      linksGrid.style.display = 'none';
-      emptyState.style.display = 'flex';
-      emptyState.innerHTML = `
-        <div class="error-state">
-          <div class="error-icon">😿</div>
-          <div class="error-text">Tab系统初始化失败</div>
-          <div class="error-detail">${error.message}</div>
-          <button class="retry-btn" data-action="reload">重试</button>
-        </div>
-      `;
-      
-      // 绑定重试按钮事件
-      const retryBtn = emptyState.querySelector('.retry-btn');
-      if (retryBtn) {
-        retryBtn.addEventListener('click', () => {
-          location.reload();
-        });
-      }
-    }
-  }
+  // UI状态和通知管理已移至UIManager及其子组件
   
   /**
    * 显示通知 - 委托给UIManager
@@ -895,9 +743,9 @@ class ToolboxApp {
       
       // 如果当前显示的是被删除的文件夹，切换到Dashboard
       const currentTabKey = this.stateManager.getStateValue('tabs.active');
-      const currentTab = currentTabKey ? this.localRegisteredTabs?.get(currentTabKey) : null;
+      const activeTab = this.tabContainer.getActiveTab();
       
-      if (currentTab && currentTab.folderId === folderId) {
+      if (activeTab && activeTab.folderId === folderId) {
         console.log('🔄 切换到Dashboard（删除的是当前文件夹）');
         this.switchToTab('dashboard');
       }
@@ -931,9 +779,9 @@ class ToolboxApp {
       
       // 保存当前状态
       const currentTab = this.stateManager.getStateValue('tabs.active');
-      const expandedIds = this.saveFolderExpandedStates();
+      // 文件夹展开状态管理已移至SidebarManager
       
-      console.log('💾 已保存当前状态:', { currentTab, expandedCount: expandedIds.size });
+      console.log('💾 已保存当前状态:', { currentTab });
       
       // 强制刷新BookmarkManager缓存
       await this.bookmarkManager.refreshCache();
@@ -943,9 +791,8 @@ class ToolboxApp {
       await this.loadAndProcessBookmarksData();
       console.log('✅ 数据已重新加载并处理');
       
-      // 恢复展开状态
-      this.restoreFolderExpandedStates(expandedIds);
-      console.log('✅ 展开状态已恢复');
+      // 文件夹状态恢复已移至SidebarManager
+      console.log('✅ 状态恢复已委托给SidebarManager');
       
       // 恢复选中状态
       if (currentTab && this.uiManager) {
@@ -954,17 +801,12 @@ class ToolboxApp {
         console.log('✅ 选中状态已恢复');
       }
       
-      // 通知当前Tab数据更新
-      const currentTabInstance = currentTab ? this.localRegisteredTabs?.get(currentTab) : null;
-      
-      if (currentTabInstance && currentTabInstance.onDataUpdate) {
-        const dataState = this.stateManager.getDataState();
-        currentTabInstance.onDataUpdate('manual-refresh', {
-          allLinks: dataState.allLinks,
-          folderTree: dataState.folderTree
-        });
-        console.log('✅ 当前Tab已通知数据更新');
-      }
+      // 通知当前Tab数据更新（已由事件总线处理）
+      this.eventBus.emit('data-updated', {
+        action: 'manual-refresh',
+        data: this.stateManager.getDataState()
+      });
+      console.log('✅ 当前Tab已通知数据更新');
       
       console.log('🎉 文件夹树刷新完成！');
       
@@ -974,154 +816,7 @@ class ToolboxApp {
     }
   }
   
-  // ==================== 对话框工具类 ====================
-  
-  /**
-   * 创建对话框
-   * @param {Object} options - 对话框选项
-   * @returns {Object} 对话框对象
-   */
-  createDialog(options) {
-    const {
-      title = '确认',
-      message = '',
-      warning = '',
-      type = 'confirm', // 'confirm', 'input'
-      inputValue = '',
-      inputPlaceholder = '',
-      confirmText = '确认',
-      cancelText = '取消',
-      isDangerous = false
-    } = options;
-    
-    // 创建对话框容器
-    const overlay = document.createElement('div');
-    overlay.className = 'dialog-overlay';
-    
-    const dialog = document.createElement('div');
-    dialog.className = `dialog ${isDangerous ? 'dialog-danger' : ''}`;
-    
-    let inputElement = null;
-    
-    dialog.innerHTML = `
-      <div class="dialog-header">
-        <h3 class="dialog-title">${title}</h3>
-      </div>
-      <div class="dialog-body">
-        ${message ? `<p class="dialog-message">${message}</p>` : ''}
-        ${warning ? `<p class="dialog-warning">${warning}</p>` : ''}
-        ${type === 'input' ? `
-          <div class="dialog-input-group">
-            <input type="text" class="dialog-input" value="${inputValue}" placeholder="${inputPlaceholder}" />
-          </div>
-        ` : ''}
-      </div>
-      <div class="dialog-footer">
-        <button class="dialog-btn dialog-btn-cancel">${cancelText}</button>
-        <button class="dialog-btn dialog-btn-confirm ${isDangerous ? 'btn-danger' : ''}">${confirmText}</button>
-      </div>
-    `;
-    
-    overlay.appendChild(dialog);
-    
-    if (type === 'input') {
-      inputElement = dialog.querySelector('.dialog-input');
-    }
-    
-    // 对话框对象
-    const dialogObj = {
-      element: overlay,
-      onConfirm: null,
-      onCancel: null,
-      
-      show() {
-        document.body.appendChild(overlay);
-        
-        // 显示动画
-        setTimeout(() => {
-          overlay.classList.add('show');
-        }, 10);
-        
-        // 聚焦输入框
-        if (inputElement) {
-          setTimeout(() => {
-            inputElement.focus();
-            inputElement.select();
-          }, 100);
-        }
-        
-        // 绑定事件
-        this.bindEvents();
-      },
-      
-      hide() {
-        if (overlay.parentNode) {
-          overlay.parentNode.removeChild(overlay);
-        }
-      },
-      
-      bindEvents() {
-        // 取消按钮
-        const cancelBtn = dialog.querySelector('.dialog-btn-cancel');
-        cancelBtn.addEventListener('click', () => {
-          if (this.onCancel) {
-            this.onCancel();
-          }
-          this.hide();
-        });
-        
-        // 确认按钮
-        const confirmBtn = dialog.querySelector('.dialog-btn-confirm');
-        const handleConfirm = async () => {
-          if (this.onConfirm) {
-            const inputValue = inputElement ? inputElement.value : null;
-            const result = await this.onConfirm(inputValue);
-            
-            // 如果返回true，关闭对话框
-            if (result !== false) {
-              this.hide();
-            }
-          } else {
-            this.hide();
-          }
-        };
-        
-        confirmBtn.addEventListener('click', handleConfirm);
-        
-        // 回车键确认
-        if (inputElement) {
-          inputElement.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleConfirm();
-            }
-          });
-        }
-        
-        // ESC键取消
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            if (this.onCancel) {
-              this.onCancel();
-            }
-            this.hide();
-          }
-        });
-        
-        // 点击遮罩关闭
-        overlay.addEventListener('click', (e) => {
-          if (e.target === overlay) {
-            if (this.onCancel) {
-              this.onCancel();
-            }
-            this.hide();
-          }
-        });
-      }
-    };
-    
-    return dialogObj;
-  }
+  // 对话框管理已移至DialogManager
 }
 
 // ==================== 应用启动 ====================
