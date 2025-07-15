@@ -661,6 +661,16 @@ class ToolboxApp {
       // 延迟一点时间让Chrome更新缓存
       setTimeout(async () => {
         try {
+          // 确保父文件夹将被展开显示
+          if (this.uiManager && this.uiManager.getSidebarManager()) {
+            // 获取SidebarManager实例
+            const sidebarManager = this.uiManager.getSidebarManager();
+            // 将父文件夹添加到展开状态集合中
+            sidebarManager.expandedFolders.add(parentId);
+            console.log('✅ 已将父文件夹标记为展开状态:', parentId);
+          }
+          
+          // 刷新文件夹树
           await this.refreshFolderTree();
           console.log('✅ 界面刷新完成');
         } catch (error) {

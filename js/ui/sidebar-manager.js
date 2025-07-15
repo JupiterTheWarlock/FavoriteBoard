@@ -13,9 +13,10 @@ class SidebarManager {
     this.folderTreeContainer = null;
     
     // 状态管理
-    this.expandedFolders = new Set();
+    this.expandedFolders = new Set(); // 运行时缓存的展开状态
     this.selectedFolder = null;
     this.isInitialized = false;
+    this.isFirstRender = true; // 标记是否是首次渲染
     
     console.log('🌳 SidebarManager初始化开始...');
     
@@ -47,6 +48,8 @@ class SidebarManager {
     }
   }
   
+
+
   /**
    * 缓存DOM元素
    */
@@ -133,6 +136,9 @@ class SidebarManager {
         return;
       }
       
+      // 应用展开状态到文件夹树
+      this.applyExpandedStatesBeforeRender(folderTree);
+      
       // 渲染文件夹树
       if (folderTree.length > 0) {
         folderTree.forEach(node => {
@@ -149,6 +155,43 @@ class SidebarManager {
     } catch (error) {
       console.error('❌ 渲染文件夹树失败:', error);
       this.renderErrorState(error);
+    }
+  }
+  
+  /**
+   * 在渲染前应用展开状态到文件夹树
+   * @param {Array} folderTree - 文件夹树数据
+   */
+  applyExpandedStatesBeforeRender(folderTree) {
+    const traverseAndApplyStates = (nodes) => {
+      nodes.forEach(node => {
+        if (node && node.id) {
+          if (this.isFirstRender) {
+            // 首次渲染：使用DataProcessor设置的默认展开状态，并缓存到运行时
+            if (node.isExpanded) {
+              this.expandedFolders.add(node.id);
+            }
+          } else {
+            // 后续渲染：应用运行时缓存的展开状态
+            node.isExpanded = this.expandedFolders.has(node.id);
+          }
+          
+          // 递归处理子节点
+          if (node.children && node.children.length > 0) {
+            traverseAndApplyStates(node.children);
+          }
+        }
+      });
+    };
+    
+    traverseAndApplyStates(folderTree);
+    
+    // 如果是首次渲染，标记为已完成首次渲染
+    if (this.isFirstRender) {
+      this.isFirstRender = false;
+      console.log('🌱 首次渲染：已缓存DataProcessor设置的默认展开状态到运行时');
+    } else {
+      console.log('🔄 已应用运行时缓存的展开状态');
     }
   }
   
@@ -378,8 +421,8 @@ class SidebarManager {
         this.updateSelection(type, instanceId);
       }
       
-      // 保存展开状态到本地存储
-      this.saveExpandedStates();
+      // 更新运行时展开状态缓存
+      this.updateExpandedStatesCache();
       
       console.log(`✅ 文件夹 ${folder.title} 展开状态: ${folder.isExpanded ? '展开' : '折叠'}`);
       
@@ -519,19 +562,19 @@ class SidebarManager {
   }
   
   /**
-   * 保存展开状态到本地存储
+   * 更新运行时展开状态缓存
    */
-  saveExpandedStates() {
+  updateExpandedStatesCache() {
     try {
       const folderTree = this.stateManager?.getStateValue('data.folderTree');
       if (!folderTree) return;
       
-      const expandedIds = new Set();
-      
+      // 从文件夹树中收集当前展开的节点ID
+      const currentExpandedIds = new Set();
       const traverseTree = (nodes) => {
         nodes.forEach(node => {
           if (node.isExpanded) {
-            expandedIds.add(node.id);
+            currentExpandedIds.add(node.id);
           }
           if (node.children && node.children.length > 0) {
             traverseTree(node.children);
@@ -541,46 +584,17 @@ class SidebarManager {
       
       traverseTree(folderTree);
       
-      // 可以在这里实现本地存储逻辑
-      this.expandedFolders = expandedIds;
+      // 更新运行时缓存
+      this.expandedFolders = currentExpandedIds;
       
-      console.log('💾 文件夹展开状态已保存');
+      console.log('💾 运行时展开状态缓存已更新');
       
     } catch (error) {
-      console.warn('⚠️ 保存文件夹展开状态失败:', error);
+      console.warn('⚠️ 更新展开状态缓存失败:', error);
     }
   }
   
-  /**
-   * 恢复展开状态
-   * @param {Set} expandedIds - 展开的文件夹ID集合
-   */
-  restoreExpandedStates(expandedIds) {
-    try {
-      const folderTree = this.stateManager?.getStateValue('data.folderTree');
-      if (!folderTree) return;
-      
-      const traverseTree = (nodes) => {
-        nodes.forEach(node => {
-          if (expandedIds.has(node.id)) {
-            node.isExpanded = true;
-          }
-          if (node.children && node.children.length > 0) {
-            traverseTree(node.children);
-          }
-        });
-      };
-      
-      traverseTree(folderTree);
-      
-      this.expandedFolders = new Set(expandedIds);
-      
-      console.log('✅ 文件夹展开状态已恢复');
-      
-    } catch (error) {
-      console.warn('⚠️ 恢复文件夹展开状态失败:', error);
-    }
-  }
+
   
   /**
    * 主题变更处理
