@@ -10,6 +10,7 @@ class ToolboxApp {
     // 核心系统
     this.eventBus = window.eventBus;
     this.stateManager = null;  // 状态管理器
+    this.uiManager = null;     // UI管理器
     
     // Tab管理相关
     this.tabContainer = null;  // Tab容器
@@ -27,13 +28,6 @@ class ToolboxApp {
     // UI元素缓存
     this.searchInput = null;
     
-    // 文件夹右键菜单相关
-    this.currentFolderContextMenu = null;
-    this.currentFolderForContext = null;
-    
-    // Tab右键菜单相关
-    this.tabContextMenu = null;
-    
     console.log('🐱 主应用初始化开始...');
     
     // 检查扩展环境
@@ -41,6 +35,9 @@ class ToolboxApp {
     
     // 初始化状态管理器
     this.initStateManager();
+    
+    // 初始化UI管理器
+    this.initUIManager();
     
     // 初始化Tab容器
     this.initTabContainer();
@@ -75,6 +72,26 @@ class ToolboxApp {
   }
   
   /**
+   * 初始化UI管理器
+   */
+  initUIManager() {
+    try {
+      if (!this.eventBus || !this.stateManager) {
+        throw new Error('核心系统不可用');
+      }
+      
+      // 创建UI管理器实例
+      this.uiManager = new UIManager(this.eventBus, this.stateManager, this.bookmarkManager);
+      
+      console.log('✅ UI管理器初始化完成');
+      
+    } catch (error) {
+      console.error('❌ UI管理器初始化失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
    * 初始化Tab容器
    */
   initTabContainer() {
@@ -100,9 +117,9 @@ class ToolboxApp {
   setupStateSubscriptions() {
     // 监听数据状态变更
     this.stateManager.subscribe(['data.folderTree', 'data.allLinks'], ([folderTree, allLinks]) => {
-      // 数据更新时重新渲染文件夹树
-      if (folderTree && folderTree.length > 0) {
-        this.renderFolderTree();
+      // 数据更新时通过UIManager重新渲染文件夹树
+      if (folderTree && folderTree.length > 0 && this.uiManager) {
+        this.uiManager.renderFolderTree();
       }
     });
     
@@ -144,30 +161,48 @@ class ToolboxApp {
     // 监听通知请求事件
     this.eventBus.on('notification-requested', (data) => {
       this.showNotification(data.message, data.type);
-    });
+    }, { unique: true });
     
     // 监听Tab切换完成事件
     this.eventBus.on('tab-switched', (data) => {
       // 更新UI状态
       this.updateSearchBarVisibility();
-    });
+    }, { unique: true });
     
     // 监听数据刷新请求事件
     this.eventBus.on('data-refresh-requested', () => {
       this.refreshFolderTree();
-    });
+    }, { unique: true });
     
     // 监听搜索查询变化事件
     this.eventBus.on('search-query-changed', (query) => {
       // 这里可以添加全局搜索处理逻辑
       console.log('🔍 搜索查询变化:', query);
-    });
+    }, { unique: true });
     
     // 监听窗口大小变化事件
     this.eventBus.on('window-resized', () => {
       // 处理窗口大小变化
       console.log('📏 窗口大小变化');
-    });
+    }, { unique: true });
+    
+    // 监听文件夹点击事件
+    this.eventBus.on('folder-clicked', (data) => {
+      this.handleFolderClick(data.folderId, data.folderData);
+    }, { unique: true });
+    
+    // 监听文件夹操作请求事件
+    this.eventBus.on('folder-create-requested', (data) => {
+      this.createSubfolder(data.parentId, data.folderName);
+    }, { unique: true });
+    
+    this.eventBus.on('folder-rename-requested', (data) => {
+      this.renameFolder(data.folderId, data.newName);
+    }, { unique: true });
+    
+    this.eventBus.on('folder-delete-requested', (data) => {
+      this.deleteFolder(data.folderId);
+    }, { unique: true });
     
     console.log('✅ 事件总线监听器初始化完成');
   }
@@ -290,7 +325,9 @@ class ToolboxApp {
       const tab = await this.tabContainer.switchToTab(type, instanceId, options);
       
       // 更新文件夹树选择状态
-      this.updateFolderTreeSelection(type, instanceId);
+      if (this.uiManager) {
+        this.uiManager.updateFolderTreeSelection(type, instanceId);
+      }
       
       return tab;
     } catch (error) {
@@ -307,53 +344,7 @@ class ToolboxApp {
     return document.getElementById('tabContent');
   }
   
-  /**
-   * 更新文件夹树选择状态
-   * @param {string} type - Tab类型
-   * @param {string} instanceId - 实例ID
-   */
-  updateFolderTreeSelection(type, instanceId) {
-    try {
-      // 移除所有选中状态
-      const allItems = document.querySelectorAll('.tree-item');
-      allItems.forEach(item => item.classList.remove('active'));
-      
-      // 根据Tab类型和实例ID设置选中状态
-      if (type === 'dashboard') {
-        // 选中Dashboard
-        const dashboardItem = document.querySelector('.tree-item[data-folder-id="dashboard"]');
-        if (dashboardItem) {
-          dashboardItem.classList.add('active');
-        }
-      } else if (type === 'bookmark') {
-        // 选中对应的文件夹
-        const folderItem = document.querySelector(`.tree-item[data-folder-id="${instanceId}"]`);
-        if (folderItem) {
-          folderItem.classList.add('active');
-          
-          // 确保父文件夹都展开
-          this.ensureParentFoldersExpanded(folderItem);
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ 更新文件夹树选择状态失败:', error);
-    }
-  }
-  
-  /**
-   * 确保父文件夹都展开
-   * @param {HTMLElement} folderItem - 文件夹元素
-   */
-  ensureParentFoldersExpanded(folderItem) {
-    let parent = folderItem.parentElement.closest('.tree-item');
-    while (parent) {
-      const toggle = parent.querySelector('.tree-toggle');
-      if (toggle && !parent.classList.contains('expanded')) {
-        toggle.click();
-      }
-      parent = parent.parentElement.closest('.tree-item');
-    }
-  }
+
   
   /**
    * 更新搜索栏可见性
@@ -365,16 +356,15 @@ class ToolboxApp {
       
       if (!activeTab) {
         // 没有激活的Tab，隐藏搜索栏
-        if (this.searchInput) {
-          this.searchInput.parentElement.style.display = 'none';
+        if (this.uiManager) {
+          this.uiManager.updateSearchBarVisibility(false);
         }
         return;
       }
       
       // 根据Tab配置显示或隐藏搜索栏
-      if (this.searchInput) {
-        const searchContainer = this.searchInput.parentElement;
-        searchContainer.style.display = activeTab.options.showSearch ? 'flex' : 'none';
+      if (this.uiManager) {
+        this.uiManager.updateSearchBarVisibility(activeTab.options.showSearch);
       }
       
     } catch (error) {
@@ -385,6 +375,35 @@ class ToolboxApp {
   // ==================== 事件处理 ====================
   
   /**
+   * 处理文件夹点击事件
+   * @param {string} folderId - 文件夹ID
+   * @param {Object} folderData - 文件夹数据
+   */
+  handleFolderClick(folderId, folderData) {
+    console.log(`🖱️ 处理文件夹点击: ${folderId}`);
+    
+    if (folderId === 'dashboard') {
+      // 切换到Dashboard
+      this.switchToTab('dashboard');
+    } else if (folderId) {
+      try {
+        // 切换到收藏夹Tab
+        this.switchToTab('bookmark', folderId, {
+          data: {
+            folderId: folderId,
+            folderData: folderData
+          }
+        });
+      } catch (error) {
+        console.error('❌ 切换到文件夹失败:', error);
+        if (this.uiManager) {
+          this.uiManager.showNotification('切换文件夹时发生错误', 'error');
+        }
+      }
+    }
+  }
+  
+  /**
    * 绑定事件
    */
   bindEvents() {
@@ -393,11 +412,7 @@ class ToolboxApp {
     // 搜索事件
     this.bindSearchEvents();
     
-    // 文件夹树点击事件
-    this.bindFolderTreeEvents();
-    
-    // 文件夹树展开/折叠事件
-    this.bindTreeToggleEvents();
+    // 文件夹树事件已移至SidebarManager处理
     
     // Tab右键菜单事件
     this.bindTabContextMenuEvents();
@@ -429,76 +444,7 @@ class ToolboxApp {
     }
   }
   
-  /**
-   * 绑定文件夹树事件
-   */
-  bindFolderTreeEvents() {
-    const folderTree = document.getElementById('folderTree');
-    if (!folderTree) return;
-    
-    // 左键点击事件
-    folderTree.addEventListener('click', (e) => {
-      // 如果点击的是展开/折叠按钮，则不处理文件夹点击
-      if (e.target.closest('.tree-toggle')) {
-        return;
-      }
-      
-      const treeItem = e.target.closest('.tree-item');
-      if (!treeItem) return;
-      
-      const folderId = treeItem.dataset.folderId;
-      console.log(`🖱️ 点击文件夹: ${folderId}`);
-      
-      if (folderId === 'dashboard') {
-        // 切换到Dashboard
-        this.switchToTab('dashboard');
-      } else if (folderId) {
-        try {
-          // 安全获取文件夹数据
-          const folderMap = this.stateManager?.getStateValue('data.folderMap');
-          if (!folderMap || !(folderMap instanceof Map)) {
-            console.warn(`🐱 文件夹映射表不可用或格式不正确`);
-            this.showNotification('无法切换到此文件夹，数据不可用', 'error');
-            return;
-          }
-          
-          // 获取文件夹数据
-          const folderData = folderMap.get(folderId);
-          console.log(`📁 文件夹数据:`, folderData);
-          
-          // 切换到收藏夹Tab
-          this.switchToTab('bookmark', folderId, {
-            data: {
-              folderId: folderId,
-              folderData: folderData
-            }
-          });
-        } catch (error) {
-          console.error('❌ 切换到文件夹失败:', error);
-          this.showNotification('切换文件夹时发生错误', 'error');
-        }
-      }
-    });
-    
-    // 右键菜单事件
-    folderTree.addEventListener('contextmenu', (e) => {
-      const treeItem = e.target.closest('.tree-item');
-      if (!treeItem) return;
-      
-      const folderId = treeItem.dataset.folderId;
-      
-      // Dashboard不显示右键菜单
-      if (folderId === 'dashboard' || folderId === 'all') {
-        return;
-      }
-      
-      e.preventDefault();
-      this.showFolderContextMenu(e, folderId, treeItem);
-    });
-    
-    // 绑定全局点击事件隐藏右键菜单
-    this.bindFolderContextMenuEvents();
-  }
+
   
   /**
    * 绑定Tab右键菜单事件
@@ -551,7 +497,7 @@ class ToolboxApp {
           }
           break;
       }
-    });
+    }, { unique: true });
     
     console.log('✅ Tab右键菜单事件绑定完成');
   }
@@ -657,540 +603,12 @@ class ToolboxApp {
     return DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
   }
   
-  // ==================== 文件夹树渲染 ====================
+  // ==================== 文件夹树渲染 (已移至SidebarManager) ====================
   
-  /**
-   * 渲染文件夹树
-   */
-  renderFolderTree() {
-    try {
-      const folderTreeContainer = document.getElementById('folderTree');
-      if (!folderTreeContainer) {
-        console.warn('⚠️ 找不到文件夹树容器元素');
-        return;
-      }
-      
-      // 清空现有内容
-      folderTreeContainer.innerHTML = '';
-      
-      // 添加Dashboard节点
-      const dashboardNode = this.createDashboardNode();
-      folderTreeContainer.appendChild(dashboardNode);
-      
-      // 从StateManager安全获取文件夹树数据
-      const folderTree = this.stateManager?.getStateValue('data.folderTree');
-      if (!folderTree || !Array.isArray(folderTree)) {
-        console.warn('⚠️ 文件夹树数据不可用或格式不正确');
-        
-        // 添加空状态提示
-        const emptyNode = document.createElement('div');
-        emptyNode.className = 'empty-tree';
-        emptyNode.innerHTML = '<div class="empty-tree-message">暂无文件夹数据</div>';
-        folderTreeContainer.appendChild(emptyNode);
-        
-        return;
-      }
-      
-      // 渲染文件夹树
-      if (folderTree.length > 0) {
-        folderTree.forEach(node => {
-          if (node) {
-            this.renderTreeNode(node, folderTreeContainer, 0);
-          }
-        });
-        console.log('🌳 文件夹树渲染完成');
-      } else {
-        // 添加空状态提示
-        const emptyNode = document.createElement('div');
-        emptyNode.className = 'empty-tree';
-        emptyNode.innerHTML = '<div class="empty-tree-message">暂无文件夹数据</div>';
-        folderTreeContainer.appendChild(emptyNode);
-        
-        console.log('🌳 文件夹树为空');
-      }
-    } catch (error) {
-      console.error('❌ 渲染文件夹树失败:', error);
-      
-      // 尝试恢复显示
-      const folderTreeContainer = document.getElementById('folderTree');
-      if (folderTreeContainer) {
-        folderTreeContainer.innerHTML = '<div class="error-tree">加载文件夹失败</div>';
-      }
-    }
-  }
+  // ==================== 文件夹右键菜单 (已移至ContextMenuManager) ====================
   
-  /**
-   * 递归渲染树节点
-   * @param {Object} node - 节点数据
-   * @param {HTMLElement} container - 容器元素
-   * @param {number} depth - 层级深度
-   */
-  renderTreeNode(node, container, depth = 0) {
-    // 创建节点元素
-    const nodeElement = this.createTreeNodeElement(node, depth);
-    container.appendChild(nodeElement);
-    
-    // 如果有子节点且展开状态，递归渲染子节点
-    if (node.children && node.children.length > 0 && node.isExpanded) {
-      node.children.forEach(child => {
-        this.renderTreeNode(child, container, depth + 1);
-      });
-    }
-  }
-  
-  /**
-   * 创建树节点元素
-   * @param {Object} node - 节点数据
-   * @param {number} depth - 层级深度
-   * @returns {HTMLElement} 节点元素
-   */
-  createTreeNodeElement(node, depth = 0) {
-    const item = document.createElement('div');
-    item.className = 'tree-item';
-    item.dataset.folderId = node.id;
-    item.dataset.depth = depth;
-    item.style.paddingLeft = `${depth * 20 + 12}px`;
-    
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = node.isExpanded || false;
-    
-    item.innerHTML = `
-      <div class="tree-content">
-        ${hasChildren ? 
-          `<span class="tree-toggle ${isExpanded ? 'expanded' : ''}" data-folder-id="${node.id}">▶</span>` : 
-          '<span class="tree-spacer" style="width: 20px; display: inline-block;"></span>'
-        }
-        <span class="tree-icon">${node.icon}</span>
-        <span class="tree-title">${node.title}</span>
-        <span class="bookmark-count">${node.bookmarkCount || 0}</span>
-      </div>
-    `;
-    
-    return item;
-  }
-  
-  /**
-   * 绑定树节点展开/折叠事件 - 只初始化时调用一次
-   */
-  bindTreeToggleEvents() {
-    const folderTree = document.getElementById('folderTree');
-    if (!folderTree) return;
-    
-    // 使用事件委托，只绑定一次
-    folderTree.addEventListener('click', (e) => {
-      const toggle = e.target.closest('.tree-toggle');
-      if (!toggle) return;
-      
-      e.stopPropagation(); // 阻止冒泡到父节点点击事件
-      e.preventDefault(); // 阻止默认行为
-      
-      const folderId = toggle.dataset.folderId;
-      this.toggleTreeNode(folderId);
-    });
-    
-    console.log('🔗 树节点展开/折叠事件绑定完成');
-  }
-  
-  /**
-   * 切换树节点展开/折叠状态
-   * @param {string} folderId - 文件夹ID
-   */
-  toggleTreeNode(folderId) {
-    try {
-      // 安全获取folderMap
-      const folderMap = this.stateManager?.getStateValue('data.folderMap');
-      if (!folderMap || !(folderMap instanceof Map)) {
-        console.warn(`🐱 文件夹映射表不可用或格式不正确`);
-        this.showNotification('无法展开/折叠文件夹，数据不可用', 'error');
-        return;
-      }
-      
-      // 安全获取folder
-      const folder = folderMap.get(folderId);
-      if (!folder) {
-        console.warn(`🐱 文件夹数据不存在: ${folderId}`);
-        this.showNotification('无法找到此文件夹的数据', 'error');
-        return;
-      }
-      
-      // 检查是否有子节点
-      if (!folder.children || folder.children.length === 0) {
-        console.log(`📁 文件夹 ${folder.title} 没有子节点`);
-        return;
-      }
-      
-      // 获取当前激活的Tab信息
-      const activeTab = this.tabContainer?.getActiveTab();
-      const activeTabType = activeTab?.id;
-      const activeTabInstanceId = activeTab ? this.tabContainer.getTabInstanceId(activeTab) : null;
-      
-      // 切换展开状态
-      folder.isExpanded = !folder.isExpanded;
-      
-      // 重新渲染文件夹树（但不重新绑定事件）
-      this.renderFolderTree();
-      
-      // 恢复Tab选中状态
-      if (activeTabType && activeTabInstanceId) {
-        this.updateFolderTreeSelection(activeTabType, activeTabInstanceId);
-      }
-      
-      // 保存展开状态到本地存储
-      this.saveFolderExpandedStates();
-      
-      console.log(`🔄 切换文件夹 ${folder.title} 展开状态: ${folder.isExpanded ? '展开' : '折叠'}`);
-    } catch (error) {
-      console.error('❌ 切换文件夹展开状态失败:', error);
-      this.showNotification('操作文件夹时发生错误', 'error');
-    }
-  }
-  
-  /**
-   * 创建Dashboard节点
-   */
-  createDashboardNode() {
-    const dashboardItem = document.createElement('div');
-    dashboardItem.className = 'tree-item dashboard-item';
-    dashboardItem.dataset.folderId = 'dashboard';
-    dashboardItem.innerHTML = `
-      <div class="tree-content">
-        <span class="tree-icon">📊</span>
-        <span class="tree-title">Dashboard</span>
-      </div>
-    `;
-    return dashboardItem;
-  }
-  
-  // ==================== 文件夹右键菜单 ====================
-  
+  // 旧的文件夹右键菜单处理代码已移除，现在使用 SidebarManager + ContextMenuManager 架构
 
-  
-  /**
-   * 显示文件夹右键菜单
-   * @param {Event} event - 鼠标事件
-   * @param {string} folderId - 文件夹ID
-   * @param {HTMLElement} treeItem - 树节点元素
-   */
-  showFolderContextMenu(event, folderId, treeItem) {
-    try {
-      // 隐藏之前的菜单
-      this.hideFolderContextMenu();
-      
-      // 安全获取folderMap
-      const folderMap = this.stateManager?.getStateValue('data.folderMap');
-      
-      if (!folderMap || !(folderMap instanceof Map)) {
-        console.warn(`🐱 文件夹映射表不可用或格式不正确`);
-        this.showNotification('无法显示文件夹菜单，数据不可用', 'error');
-        return;
-      }
-
-      // 安全获取folderData
-      let folderData = folderMap.get(folderId);
-
-      // 如果在folderMap中找不到，尝试从bookmarkManager的缓存中获取
-      if (!folderData && this.bookmarkManager && this.bookmarkManager.cache) {
-        // 尝试从原始的folderMap获取
-        const originalFolderMap = this.bookmarkManager.cache.folderMap;
-        if (originalFolderMap && originalFolderMap[folderId]) {
-          const originalData = originalFolderMap[folderId];
-          folderData = {
-            id: folderId,
-            title: originalData.title || '未知文件夹',
-            parentId: originalData.parentId,
-            bookmarkCount: originalData.bookmarkCount || 0,
-            path: originalData.path,
-            dateAdded: originalData.dateAdded,
-            children: [],
-            isExpanded: false,
-            icon: '📁'
-          };
-        }
-        
-        // 尝试从tree中查找
-        if (!folderData && this.bookmarkManager.cache.tree) {
-          const findInTree = (nodes) => {
-            for (const node of nodes) {
-              if (node.id === folderId) {
-                return {
-                  id: node.id,
-                  title: node.title || '未知文件夹',
-                  parentId: node.parentId,
-                  bookmarkCount: 0,
-                  children: node.children || [],
-                  isExpanded: false,
-                  icon: '📁'
-                };
-              }
-              if (node.children) {
-                const found = findInTree(node.children);
-                if (found) return found;
-              }
-            }
-            return null;
-          };
-          
-          folderData = findInTree(this.bookmarkManager.cache.tree);
-        }
-      }
-
-      if (!folderData) {
-        console.warn(`🐱 文件夹数据不存在: ${folderId}`);
-        this.showNotification('无法找到此文件夹的数据', 'error');
-        return;
-      }
-      
-      this.currentFolderForContext = folderData;
-      
-      // 检查是否为根文件夹（可删除性检查）
-      const isRootFolder = this.isRootFolder(folderData);
-      
-      // 创建菜单
-      const menu = document.createElement('div');
-      menu.className = 'folder-context-menu show';
-      menu.innerHTML = `
-        <div class="context-menu-item" data-action="createSubfolder">
-          <span class="icon">📁</span>
-          <span class="menu-text">创建子文件夹</span>
-        </div>
-        <div class="context-menu-item" data-action="rename">
-          <span class="icon">✏️</span>
-          <span class="menu-text">重命名</span>
-        </div>
-        ${!isRootFolder ? `
-        <div class="context-menu-separator"></div>
-        <div class="context-menu-item danger" data-action="delete">
-          <span class="icon">🗑️</span>
-          <span class="menu-text">删除文件夹</span>
-        </div>
-        ` : ''}
-      `;
-      
-      // 智能定位菜单
-      const position = calculateSmartMenuPosition(event, menu, {
-        margin: 10,
-        preferRight: true,
-        preferBottom: true
-      });
-      
-      // 设置菜单样式和位置
-      menu.style.position = 'fixed';
-      menu.style.left = position.left + 'px';
-      menu.style.top = position.top + 'px';
-      menu.style.zIndex = '10000';
-      
-      document.body.appendChild(menu);
-      this.currentFolderContextMenu = menu;
-      
-      // 绑定菜单事件
-      this.bindSingleFolderContextMenuEvents(menu, folderData);
-      
-      console.log(`🐱 显示文件夹右键菜单: ${folderData.title}`);
-    } catch (error) {
-      console.error('❌ 显示文件夹右键菜单失败:', error);
-      this.showNotification('显示菜单时发生错误', 'error');
-    }
-  }
-  
-  /**
-   * 绑定文件夹右键菜单全局事件
-   */
-  bindFolderContextMenuEvents() {
-    // 点击空白处隐藏菜单
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.folder-context-menu')) {
-        this.hideFolderContextMenu();
-      }
-    });
-    
-    // 按ESC键隐藏菜单
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        this.hideFolderContextMenu();
-      }
-    });
-  }
-  
-  /**
-   * 绑定单个文件夹右键菜单事件
-   * @param {HTMLElement} menu - 菜单元素
-   * @param {Object} folderData - 文件夹数据
-   */
-  bindSingleFolderContextMenuEvents(menu, folderData) {
-    const handleMenuClick = (e) => {
-      const action = e.target.closest('.context-menu-item')?.dataset.action;
-      if (!action) return;
-      
-      e.stopPropagation();
-      
-      switch (action) {
-        case 'createSubfolder':
-          this.showCreateSubfolderDialog(folderData);
-          break;
-        case 'rename':
-          this.showRenameFolderDialog(folderData);
-          break;
-        case 'delete':
-          this.showDeleteFolderConfirmation(folderData);
-          break;
-      }
-      
-      this.hideFolderContextMenu();
-    };
-    
-    menu.addEventListener('click', handleMenuClick);
-  }
-  
-  /**
-   * 隐藏文件夹右键菜单
-   */
-  hideFolderContextMenu() {
-    if (this.currentFolderContextMenu) {
-      this.currentFolderContextMenu.remove();
-      this.currentFolderContextMenu = null;
-      this.currentFolderForContext = null;
-    }
-  }
-  
-  /**
-   * 检查是否为根文件夹
-   * @param {Object} folderData - 文件夹数据
-   * @returns {boolean}
-   */
-  isRootFolder(folderData) {
-    // 检查是否为顶级文件夹（书签栏直接子文件夹）
-    const bookmarkBar = this.bookmarkManager.cache?.tree?.[0]; // 通常第一个是书签栏
-    const otherBookmarksNode = this.bookmarkManager.cache?.tree?.[1]; // 通常第二个是其他书签
-    
-    if (bookmarkBar && bookmarkBar.children) {
-      const isBookmarkBarChild = bookmarkBar.children.some(child => child.id === folderData.id);
-      if (isBookmarkBarChild) return true;
-    }
-    
-    if (otherBookmarksNode && otherBookmarksNode.children) {
-      const isOtherBookmarksChild = otherBookmarksNode.children.some(child => child.id === folderData.id);
-      if (isOtherBookmarksChild) return true;
-    }
-    
-    return false;
-  }
-  
-  /**
-   * 显示创建子文件夹对话框
-   * @param {Object} parentFolderData - 父文件夹数据
-   */
-  showCreateSubfolderDialog(parentFolderData) {
-    const dialog = this.createDialog({
-      title: `在 "${parentFolderData.title}" 中创建新文件夹`,
-      type: 'input',
-      inputPlaceholder: '文件夹名称',
-      confirmText: '创建',
-      cancelText: '取消'
-    });
-    
-    dialog.onConfirm = async (folderName) => {
-      if (!folderName.trim()) {
-        this.showNotification('文件夹名称不能为空', 'error');
-        return false;
-      }
-      
-      try {
-        await this.createSubfolder(parentFolderData.id, folderName.trim());
-        this.showNotification('文件夹创建成功', 'success');
-        return true;
-      } catch (error) {
-        console.error('❌ 创建文件夹失败:', error);
-        this.showNotification('创建文件夹失败: ' + error.message, 'error');
-        return false;
-      }
-    };
-    
-    dialog.show();
-  }
-  
-  /**
-   * 显示重命名文件夹对话框
-   * @param {Object} folderData - 文件夹数据
-   */
-  showRenameFolderDialog(folderData) {
-    const dialog = this.createDialog({
-      title: `重命名文件夹`,
-      type: 'input',
-      inputValue: folderData.title,
-      inputPlaceholder: '文件夹名称',
-      confirmText: '重命名',
-      cancelText: '取消'
-    });
-    
-    dialog.onConfirm = async (newName) => {
-      const trimmedName = newName.trim();
-      if (!trimmedName) {
-        this.showNotification('文件夹名称不能为空', 'error');
-        return false;
-      }
-      
-      if (trimmedName === folderData.title) {
-        this.showNotification('文件夹名称没有变化', 'info');
-        return true;
-      }
-      
-      try {
-        await this.renameFolder(folderData.id, trimmedName);
-        this.showNotification('文件夹重命名成功', 'success');
-        return true;
-      } catch (error) {
-        console.error('❌ 重命名文件夹失败:', error);
-        this.showNotification('重命名文件夹失败: ' + error.message, 'error');
-        return false;
-      }
-    };
-    
-    dialog.show();
-  }
-  
-  /**
-   * 显示删除文件夹确认对话框
-   * @param {Object} folderData - 文件夹数据
-   */
-  showDeleteFolderConfirmation(folderData) {
-    const hasBookmarks = folderData.bookmarkCount > 0;
-    const hasSubfolders = folderData.children && folderData.children.length > 0;
-    
-    let warningText = '';
-    if (hasBookmarks && hasSubfolders) {
-      warningText = `此文件夹包含 ${folderData.bookmarkCount} 个书签和子文件夹。`;
-    } else if (hasBookmarks) {
-      warningText = `此文件夹包含 ${folderData.bookmarkCount} 个书签。`;
-    } else if (hasSubfolders) {
-      warningText = '此文件夹包含子文件夹。';
-    }
-    
-    const dialog = this.createDialog({
-      title: '删除文件夹',
-      message: `确定要删除文件夹 "${folderData.title}" 吗？`,
-      warning: warningText + (warningText ? ' 删除后将无法恢复。' : ''),
-      type: 'confirm',
-      confirmText: '删除',
-      cancelText: '取消',
-      isDangerous: true
-    });
-    
-    dialog.onConfirm = async () => {
-      try {
-        await this.deleteFolder(folderData.id);
-        this.showNotification('文件夹删除成功', 'success');
-        return true;
-      } catch (error) {
-        console.error('❌ 删除文件夹失败:', error);
-        this.showNotification('删除文件夹失败: ' + error.message, 'error');
-        return false;
-      }
-    };
-    
-    dialog.show();
-  }
-
-  
   // ==================== 工具方法 ====================
   
   /**
@@ -1357,23 +775,15 @@ class ToolboxApp {
   }
   
   /**
-   * 显示通知
+   * 显示通知 - 委托给UIManager
    */
   showNotification(message, type = 'info', duration = 3000) {
-    // 创建通知元素
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.textContent = message;
-    
-    // 添加到页面
-    document.body.appendChild(notification);
-    
-    // 自动移除
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, duration);
+    if (this.uiManager) {
+      this.uiManager.showNotification(message, type, duration);
+    } else {
+      // Fallback到console输出
+      console.log(`[${type.toUpperCase()}] ${message}`);
+    }
   }
   
   // ==================== 文件夹操作API ====================
@@ -1464,12 +874,18 @@ class ToolboxApp {
    */
   async deleteFolder(folderId) {
     try {
-      console.log(`🐱 删除文件夹: ${folderId}`);
+      console.log(`🐱 [ToolboxApp] 删除文件夹开始:`, {
+        folderId: folderId,
+        folderIdType: typeof folderId,
+        folderIdLength: folderId?.length
+      });
       
       const response = await this.bookmarkManager.sendMessage({
         action: 'deleteFolder',
         folderId: folderId
       });
+      
+      console.log(`📨 [ToolboxApp] 后台脚本响应:`, response);
       
       if (!response.success) {
         throw new Error(response.error || '删除文件夹失败');
@@ -1532,9 +948,9 @@ class ToolboxApp {
       console.log('✅ 展开状态已恢复');
       
       // 恢复选中状态
-      if (currentTab) {
+      if (currentTab && this.uiManager) {
         const [type, instanceId] = currentTab.split(':');
-        this.updateFolderTreeSelection(type, instanceId);
+        this.uiManager.updateFolderTreeSelection(type, instanceId);
         console.log('✅ 选中状态已恢复');
       }
       
@@ -1710,14 +1126,7 @@ class ToolboxApp {
 
 // ==================== 应用启动 ====================
 
-// 等待DOM加载完成后启动应用
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    window.linkBoardApp = new ToolboxApp();
-  });
-} else {
-  window.linkBoardApp = new ToolboxApp();
-}
+// 应用初始化由 js/core/init.js 负责，避免重复初始化
 
 // 导出到全局作用域以便其他脚本使用
 window.ToolboxApp = ToolboxApp; 

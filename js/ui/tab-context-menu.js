@@ -23,7 +23,7 @@ class TabContextMenu {
     // 监听Tab右键菜单请求事件
     this.eventBus.on('tab-context-menu-requested', (data) => {
       this.showContextMenu(data.event, data.tab);
-    });
+    }, { unique: true });
     
     // 监听全局点击事件以隐藏菜单
     document.addEventListener('click', this.handleDocumentClick);

@@ -55,20 +55,20 @@ class BaseTab {
     }
     
     // 监听搜索事件
-    this.eventBus.on('search-query-changed', this.handleSearch);
+    this.eventBus.on('search-query-changed', this.handleSearch, { unique: true });
     
     // 监听窗口大小变化事件
-    this.eventBus.on('window-resized', this.handleResize);
+    this.eventBus.on('window-resized', this.handleResize, { unique: true });
     
     // 监听数据更新事件
     this.eventBus.on('data-updated', (data) => {
       this.onDataUpdate(data.action, data.data);
-    });
+    }, { unique: true });
     
     // 监听状态管理器的状态变更事件
     this.eventBus.on('state-changed', (data) => {
       this.onStateChanged(data);
-    });
+    }, { unique: true });
     
     // 注意：Tab的激活/失活事件由外部控制，这里不需要监听自己的激活事件
     // 避免无限递归调用

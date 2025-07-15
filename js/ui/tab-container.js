@@ -43,17 +43,17 @@ class TabContainer {
     // 监听Tab切换请求事件
     this.eventBus.on('tab-switch-requested', (data) => {
       this.switchToTab(data.tabId, data.instanceId, data.options);
-    });
+    }, { unique: true });
     
     // 监听Tab注册请求事件
     this.eventBus.on('tab-register-requested', (data) => {
       this.registerTab(data.type, data.instanceId, data.data);
-    });
+    }, { unique: true });
     
     // 监听Tab销毁请求事件
     this.eventBus.on('tab-destroy-requested', (data) => {
       this.destroyTab(data.type, data.instanceId);
-    });
+    }, { unique: true });
     
     console.log('✅ Tab容器事件监听器初始化完成');
   }
