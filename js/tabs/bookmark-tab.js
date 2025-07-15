@@ -386,13 +386,9 @@ class BookmarkTab extends BaseTab {
     const menu = document.createElement('div');
     menu.className = 'context-menu show';
     menu.innerHTML = `
-      <div class="context-menu-item" data-action="open">
-        <span class="icon">🔗</span>
-        <span class="menu-text">打开链接</span>
-      </div>
-      <div class="context-menu-item" data-action="openNewTab">
+      <div class="context-menu-item" data-action="openNewWindow">
         <span class="icon">📄</span>
-        <span class="menu-text">新标签页打开</span>
+        <span class="menu-text">在新窗口打开</span>
       </div>
       <div class="context-menu-item" data-action="copy">
         <span class="icon">📋</span>
@@ -441,9 +437,8 @@ class BookmarkTab extends BaseTab {
       e.stopPropagation();
       
       switch (action) {
-        case 'open':
-        case 'openNewTab':
-          chrome.tabs.create({ url: link.url });
+        case 'openNewWindow':
+          chrome.windows.create({ url: link.url });
           break;
         case 'copy':
           copyToClipboard(link.url);
