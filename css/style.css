@@ -1654,4 +1654,295 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
   /* 确保菜单始终可见 */
   pointer-events: auto;
   box-sizing: border-box;
+}
+
+/* =========================== FolderSelector 组件样式 =========================== */
+
+/* 文件夹选择器容器 */
+.folder-selector {
+  background: var(--white);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.folder-selector::-webkit-scrollbar {
+  width: 6px;
+}
+
+.folder-selector::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.folder-selector::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.folder-selector::-webkit-scrollbar-thumb:hover {
+  background: var(--text-light);
+}
+
+/* 文件夹选择器树容器 */
+.folder-selector-tree {
+  padding: 4px 0;
+}
+
+/* 文件夹选择器项目 */
+.folder-selector-item {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  margin: 0 4px;
+  user-select: none;
+}
+
+.folder-selector-item:hover {
+  background-color: #f8f9fa;
+}
+
+.folder-selector-item.selected {
+  background-color: var(--primary-color);
+  color: var(--white);
+}
+
+.folder-selector-item.selected:hover {
+  background-color: #2980b9;
+}
+
+/* 禁用状态的文件夹选择器项目 */
+.folder-selector-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background-color: #f5f5f5;
+}
+
+.folder-selector-item.disabled:hover {
+  background-color: #f5f5f5;
+}
+
+.folder-selector-item.disabled .folder-selector-title {
+  color: #999;
+}
+
+.folder-selector-item.disabled .folder-selector-icon {
+  opacity: 0.6;
+}
+
+.folder-selector-item.disabled .folder-selector-count {
+  background: #e0e0e0;
+  color: #999;
+}
+
+/* 禁用提示文字 */
+.folder-selector-disabled-hint {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+/* 文件夹选择器内容 */
+.folder-selector-content {
+  display: flex;
+  align-items: center;
+  padding: 8px 4px;
+  gap: 8px;
+  min-height: 32px;
+}
+
+/* 文件夹选择器图标 */
+.folder-selector-icon {
+  font-size: 14px;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* 文件夹选择器标题 */
+.folder-selector-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-selector-item.selected .folder-selector-title {
+  color: var(--white);
+}
+
+/* 文件夹选择器数量 */
+.folder-selector-count {
+  font-size: 12px;
+  color: var(--text-light);
+  background: var(--bg-color);
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.folder-selector-item.selected .folder-selector-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--white);
+}
+
+/* 文件夹选择器空状态 */
+.folder-selector-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  color: var(--text-light);
+}
+
+.folder-selector-empty-content {
+  text-align: center;
+}
+
+.folder-selector-empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.folder-selector-empty-message {
+  font-size: 14px;
+}
+
+/* =========================== 移动对话框样式 =========================== */
+
+/* 移动对话框特定样式 */
+.move-dialog {
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.move-dialog .dialog-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 移动对话框信息区 */
+.move-dialog-info {
+  margin-bottom: 16px;
+}
+
+.move-dialog-bookmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-color);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.move-dialog-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.move-dialog-title {
+  flex: 1;
+  font-weight: 500;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-dialog-message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+/* 移动对话框选择器容器 */
+.move-dialog-selector-container {
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.move-dialog-selector-container .folder-selector {
+  height: 100%;
+  max-height: none;
+}
+
+/* 移动对话框按钮状态 */
+.move-dialog .dialog-btn-confirm:disabled {
+  background: var(--border-color);
+  color: var(--text-light);
+  cursor: not-allowed;
+}
+
+.move-dialog .dialog-btn-confirm:disabled:hover {
+  background: var(--border-color);
+  transform: none;
+}
+
+/* =========================== 响应式适配 =========================== */
+
+/* 平板设备适配 */
+@media (max-width: 768px) {
+  .move-dialog {
+    width: 90vw;
+    max-height: 70vh;
+  }
+  
+  .folder-selector {
+    max-height: 250px;
+  }
+  
+  .move-dialog-selector-container {
+    min-height: 180px;
+  }
+}
+
+/* 手机设备适配 */
+@media (max-width: 480px) {
+  .move-dialog {
+    width: 95vw;
+    max-height: 75vh;
+  }
+  
+  .folder-selector {
+    max-height: 200px;
+  }
+  
+  .move-dialog-bookmark {
+    padding: 8px;
+  }
+  
+  .move-dialog-icon {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .folder-selector-content {
+    padding: 6px 4px;
+    gap: 6px;
+  }
+  
+  .folder-selector-title {
+    font-size: 13px;
+  }
+  
+  .folder-selector-count {
+    font-size: 11px;
+    padding: 1px 4px;
+  }
 } 

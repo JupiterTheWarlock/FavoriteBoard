@@ -571,6 +571,12 @@ class ToolboxApp {
   setupBookmarkListeners() {
     console.log('📡 设置收藏夹更新监听器...');
     
+    // 监听BookmarkManager的更新事件
+    this.bookmarkManager.on('bookmarks-updated', (eventData) => {
+      console.log('📡 收到BookmarkManager更新事件:', eventData);
+      this.handleBookmarkUpdate(eventData.action);
+    });
+    
     if (typeof chrome !== 'undefined' && chrome.bookmarks) {
       // 监听收藏夹变化
       chrome.bookmarks.onCreated.addListener(() => this.handleBookmarkUpdate('created'));
@@ -826,7 +832,26 @@ class ToolboxApp {
     }
   }
   
-  // 对话框管理已移至DialogManager
+  // ==================== 便捷访问方法 ====================
+  
+  /**
+   * 获取对话框管理器
+   * @returns {DialogManager|null}
+   */
+  get dialogManager() {
+    return this.uiManager?.getDialogManager() || null;
+  }
+  
+  /**
+   * 显示通知
+   * @param {string} message - 通知消息
+   * @param {string} type - 通知类型
+   */
+  showNotification(message, type = 'info') {
+    if (this.uiManager) {
+      this.uiManager.showNotification(message, type);
+    }
+  }
 }
 
 // ==================== 应用启动 ====================

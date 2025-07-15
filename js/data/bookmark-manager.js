@@ -316,6 +316,100 @@ class BookmarkManager {
     
     return null;
   }
+  
+  // 移动书签到指定文件夹
+  async moveBookmark(bookmarkId, targetFolderId) {
+    try {
+      console.log(`📁 移动书签: ${bookmarkId} → ${targetFolderId}`);
+      
+      if (!bookmarkId || !targetFolderId) {
+        throw new Error('书签ID和目标文件夹ID不能为空');
+      }
+      
+      // 通过background script执行移动操作
+      const response = await this.sendMessage({
+        action: 'moveBookmark',
+        bookmarkId: bookmarkId,
+        targetFolderId: targetFolderId
+      });
+      
+      if (response && response.success) {
+        console.log('✅ 书签移动成功');
+        
+        // 触发数据更新
+        await this.loadBookmarks(true);
+        
+        // 触发更新事件，通知应用重新处理数据
+        this.emit('bookmarks-updated', { 
+          action: 'bookmark-moved', 
+          data: { bookmarkId, targetFolderId }
+        });
+        
+        return true;
+      } else {
+        throw new Error(response?.error || '移动操作失败');
+      }
+      
+    } catch (error) {
+      console.error('❌ 移动书签失败:', error);
+      throw error;
+    }
+  }
+  
+  // 删除书签
+  async removeBookmark(bookmarkId) {
+    try {
+      console.log(`🗑️ 删除书签: ${bookmarkId}`);
+      
+      if (!bookmarkId) {
+        throw new Error('书签ID不能为空');
+      }
+      
+      // 通过background script执行删除操作
+      const response = await this.sendMessage({
+        action: 'deleteBookmark',
+        bookmarkId: bookmarkId
+      });
+      
+      if (response && response.success) {
+        console.log('✅ 书签删除成功');
+        
+        // 触发数据更新
+        await this.loadBookmarks(true);
+        
+        // 触发更新事件，通知应用重新处理数据
+        this.emit('bookmarks-updated', { 
+          action: 'bookmark-deleted', 
+          data: { bookmarkId }
+        });
+        
+        return true;
+      } else {
+        throw new Error(response?.error || '删除操作失败');
+      }
+      
+    } catch (error) {
+      console.error('❌ 删除书签失败:', error);
+      throw error;
+    }
+  }
+  
+  // 发送消息到background script
+  async sendMessage(message) {
+    if (typeof chrome === 'undefined' || !chrome.runtime) {
+      throw new Error('Chrome API不可用');
+    }
+    
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  }
 }
 
 // 导出为全局变量以供其他脚本使用

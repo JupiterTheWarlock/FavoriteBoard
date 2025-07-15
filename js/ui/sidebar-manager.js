@@ -37,6 +37,9 @@ class SidebarManager {
       // 绑定事件
       this.bindEvents();
       
+      // 绑定标题点击事件
+      this.bindLogoClickEvent();
+      
       // 监听状态变化
       this.setupStateSubscriptions();
       
@@ -86,6 +89,43 @@ class SidebarManager {
   }
   
   /**
+   * 绑定标题点击事件
+   */
+  bindLogoClickEvent() {
+    const logoElement = document.getElementById('siteLogo');
+    if (!logoElement) {
+      console.warn('⚠️ 找不到标题元素');
+      return;
+    }
+    
+    console.log('🔗 绑定标题点击事件...');
+    
+    // 为标题添加点击样式
+    logoElement.style.cursor = 'pointer';
+    logoElement.style.userSelect = 'none';
+    
+    // 绑定点击事件
+    logoElement.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('🖱️ 标题被点击，切换到Dashboard');
+      
+      // 发布文件夹点击事件，切换到Dashboard
+      this.eventBus.emit('folder-clicked', {
+        folderId: 'dashboard',
+        folderData: {
+          id: 'dashboard',
+          title: 'Dashboard',
+          icon: '📊'
+        }
+      });
+    });
+    
+    console.log('✅ 标题点击事件绑定完成');
+  }
+  
+  /**
    * 设置状态订阅
    */
   setupStateSubscriptions() {
@@ -123,10 +163,6 @@ class SidebarManager {
       
       // 清空现有内容
       this.folderTreeContainer.innerHTML = '';
-      
-      // 添加Dashboard节点
-      const dashboardNode = this.createDashboardNode();
-      this.folderTreeContainer.appendChild(dashboardNode);
       
       // 从StateManager安全获取文件夹树数据
       const folderTree = this.stateManager?.getStateValue('data.folderTree');
@@ -245,22 +281,7 @@ class SidebarManager {
     return item;
   }
   
-  /**
-   * 创建Dashboard节点
-   * @returns {HTMLElement} Dashboard节点元素
-   */
-  createDashboardNode() {
-    const dashboardItem = document.createElement('div');
-    dashboardItem.className = 'tree-item dashboard-item';
-    dashboardItem.dataset.folderId = 'dashboard';
-    dashboardItem.innerHTML = `
-      <div class="tree-content">
-        <span class="tree-icon">📊</span>
-        <span class="tree-title">Dashboard</span>
-      </div>
-    `;
-    return dashboardItem;
-  }
+
   
   /**
    * 渲染空状态
@@ -449,13 +470,7 @@ class SidebarManager {
       allItems.forEach(item => item.classList.remove('active'));
       
       // 根据Tab类型和实例ID设置选中状态
-      if (type === 'dashboard') {
-        // 选中Dashboard
-        const dashboardItem = document.querySelector('.tree-item[data-folder-id="dashboard"]');
-        if (dashboardItem) {
-          dashboardItem.classList.add('active');
-        }
-      } else if (type === 'bookmark') {
+      if (type === 'bookmark') {
         // 选中对应的文件夹
         const folderItem = document.querySelector(`.tree-item[data-folder-id="${instanceId}"]`);
         if (folderItem) {
@@ -465,6 +480,7 @@ class SidebarManager {
           this.ensureParentFoldersExpanded(folderItem);
         }
       }
+      // 注意：移除了Dashboard类型的选择处理，因为Dashboard不再在文件夹树中
       
       this.selectedFolder = instanceId;
       

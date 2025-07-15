@@ -593,20 +593,363 @@ class BookmarkTab extends BaseTab {
   // 这些方法比较复杂，需要在后续实现
   
   /**
-   * 显示移动到文件夹对话框（占位符）
+   * 显示移动到文件夹对话框
    * @param {Object} link - 链接对象
    */
-  showMoveToFolderDialog(link) {
-    this.showNotification('移动功能正在开发中...', 'info');
+  async showMoveToFolderDialog(link) {
+    try {
+      console.log(`📁 显示移动对话框: ${link.title}`);
+      
+      // 获取应用实例
+      const app = window.linkBoardApp;
+      if (!app || !app.dialogManager) {
+        throw new Error('应用实例或对话框管理器不可用');
+      }
+      
+      // 创建自定义移动对话框
+      const moveDialog = this.createMoveDialog(link);
+      
+      // 显示对话框
+      moveDialog.show();
+      
+    } catch (error) {
+      console.error('❌ 显示移动对话框失败:', error);
+      this.showNotification('无法显示移动对话框', 'error');
+    }
   }
   
   /**
-   * 显示删除确认对话框（占位符）
+   * 创建移动对话框
+   * @param {Object} link - 链接对象
+   * @returns {Object} 对话框对象
+   */
+  createMoveDialog(link) {
+    // 创建对话框容器
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay move-dialog-overlay';
+    
+    const dialogElement = document.createElement('div');
+    dialogElement.className = 'dialog move-dialog';
+    
+    // 构建对话框HTML
+    dialogElement.innerHTML = `
+      <div class="dialog-header">
+        <h3 class="dialog-title">移动书签</h3>
+        <button class="dialog-close" title="关闭">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="move-dialog-info">
+          <div class="move-dialog-bookmark">
+            <img class="move-dialog-icon" src="${this.getSafeIcon(link.iconUrl, link.url)}" alt="icon">
+            <span class="move-dialog-title">${this.escapeHtml(link.title)}</span>
+          </div>
+          <p class="move-dialog-message">选择要移动到的文件夹：</p>
+        </div>
+        <div class="move-dialog-selector-container">
+          <!-- FolderSelector将在这里渲染 -->
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <button class="dialog-btn dialog-btn-cancel">取消</button>
+        <button class="dialog-btn dialog-btn-confirm" disabled>移动</button>
+      </div>
+    `;
+    
+    overlay.appendChild(dialogElement);
+    
+    // 创建FolderSelector实例
+    const folderSelector = new FolderSelector({
+      excludeFolderIds: [link.parentId || link.folderId], // 禁用当前所在文件夹（显示为灰色）
+      showBookmarkCount: true,
+      onSelectionChange: (folderId, folderData) => {
+        // 当选择文件夹时，启用移动按钮
+        const confirmBtn = dialogElement.querySelector('.dialog-btn-confirm');
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.dataset.targetFolderId = folderId;
+        }
+      }
+    });
+    
+    // 获取文件夹树数据并设置到FolderSelector
+    // 直接像sidebar那样从StateManager获取完整的文件夹树数据
+    const app = window.linkBoardApp;
+    const folderTree = app.stateManager?.getStateValue('data.folderTree') || [];
+    console.log(`📁 获取到文件夹树数据: ${folderTree.length} 个顶级节点`);
+    
+    folderSelector.setFolderTree(folderTree);
+    
+    // 渲染FolderSelector
+    const selectorContainer = dialogElement.querySelector('.move-dialog-selector-container');
+    folderSelector.render(selectorContainer);
+    
+    // 创建对话框对象
+    const dialog = {
+      element: overlay,
+      dialogElement: dialogElement,
+      folderSelector: folderSelector,
+      isVisible: false,
+      
+      /**
+       * 显示对话框
+       */
+      show: () => {
+        console.log('📁 显示移动对话框');
+        
+        // 设置z-index
+        overlay.style.zIndex = '10050';
+        
+        // 添加到DOM
+        document.body.appendChild(overlay);
+        
+        // 显示动画
+        setTimeout(() => {
+          overlay.classList.add('show');
+        }, 10);
+        
+        dialog.isVisible = true;
+      },
+      
+      /**
+       * 隐藏对话框
+       */
+      hide: () => {
+        console.log('📁 隐藏移动对话框');
+        
+        if (overlay.parentNode) {
+          overlay.classList.remove('show');
+          
+          // 延迟移除DOM元素
+          setTimeout(() => {
+            if (overlay.parentNode) {
+              overlay.parentNode.removeChild(overlay);
+            }
+          }, 300);
+        }
+        
+        // 清理资源
+        if (folderSelector) {
+          folderSelector.destroy();
+        }
+        
+        dialog.isVisible = false;
+      }
+    };
+    
+    // 绑定对话框事件
+    this.bindMoveDialogEvents(dialog, link);
+    
+    return dialog;
+  }
+  
+  /**
+   * 绑定移动对话框事件
+   * @param {Object} dialog - 对话框对象
+   * @param {Object} link - 链接对象
+   */
+  bindMoveDialogEvents(dialog, link) {
+    const { dialogElement } = dialog;
+    
+    // 关闭按钮事件
+    const closeBtn = dialogElement.querySelector('.dialog-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        dialog.hide();
+      });
+    }
+    
+    // 取消按钮事件
+    const cancelBtn = dialogElement.querySelector('.dialog-btn-cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        dialog.hide();
+      });
+    }
+    
+    // 确认按钮事件
+    const confirmBtn = dialogElement.querySelector('.dialog-btn-confirm');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', async () => {
+        const targetFolderId = confirmBtn.dataset.targetFolderId;
+        if (!targetFolderId) {
+          this.showNotification('请选择目标文件夹', 'warning');
+          return;
+        }
+        
+        // 执行移动操作
+        await this.executeMoveBookmark(link, targetFolderId, dialog);
+      });
+    }
+    
+    // 点击背景关闭
+    dialog.element.addEventListener('click', (e) => {
+      if (e.target === dialog.element) {
+        dialog.hide();
+      }
+    });
+    
+    // ESC键关闭
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && dialog.isVisible) {
+        dialog.hide();
+        document.removeEventListener('keydown', handleKeyDown);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+  }
+  
+  /**
+   * 执行移动书签操作
+   * @param {Object} link - 链接对象
+   * @param {string} targetFolderId - 目标文件夹ID
+   * @param {Object} dialog - 对话框对象
+   */
+  async executeMoveBookmark(link, targetFolderId, dialog) {
+    try {
+      console.log(`📁 移动书签: ${link.title} → ${targetFolderId}`);
+      
+      // 显示加载状态
+      const confirmBtn = dialog.dialogElement.querySelector('.dialog-btn-confirm');
+      const originalText = confirmBtn.textContent;
+      confirmBtn.textContent = '移动中...';
+      confirmBtn.disabled = true;
+      
+      // 获取应用实例
+      const app = window.linkBoardApp;
+      if (!app || !app.bookmarkManager) {
+        throw new Error('书签管理器不可用');
+      }
+      
+      // 执行移动操作
+      const success = await app.bookmarkManager.moveBookmark(link.id, targetFolderId);
+      
+      if (success) {
+        // 移动成功
+        this.showNotification(`书签已移动到新文件夹`, 'success');
+        
+        // 关闭对话框
+        dialog.hide();
+        
+        // 数据更新事件将由ToolboxApp.handleBookmarkUpdate自动处理
+        
+      } else {
+        throw new Error('移动操作失败');
+      }
+      
+    } catch (error) {
+      console.error('❌ 移动书签失败:', error);
+      this.showNotification(`移动失败: ${error.message}`, 'error');
+      
+      // 恢复按钮状态
+      const confirmBtn = dialog.dialogElement.querySelector('.dialog-btn-confirm');
+      if (confirmBtn) {
+        confirmBtn.textContent = originalText;
+        confirmBtn.disabled = false;
+      }
+    }
+  }
+  
+  /**
+   * 显示删除确认对话框
    * @param {Object} link - 链接对象
    * @param {HTMLElement} card - 卡片元素
    */
-  showDeleteConfirmation(link, card) {
-    this.showNotification('删除功能正在开发中...', 'info');
+  async showDeleteConfirmation(link, card) {
+    try {
+      console.log(`🗑️ 显示删除确认对话框: ${link.title}`);
+      
+      // 获取应用实例
+      const app = window.linkBoardApp;
+      if (!app || !app.dialogManager) {
+        throw new Error('应用实例或对话框管理器不可用');
+      }
+      
+      // 创建删除确认对话框
+      const deleteDialog = app.dialogManager.create({
+        title: '删除书签',
+        message: `确定要删除书签"${link.title}"吗？`,
+        warning: '此操作不可撤销',
+        confirmText: '删除',
+        cancelText: '取消',
+        isDangerous: true,
+        type: 'confirm'
+      });
+      
+      // 设置确认回调
+      deleteDialog.onConfirm = async () => {
+        return await this.executeDeleteBookmark(link, card);
+      };
+      
+      // 显示对话框
+      deleteDialog.show();
+      
+    } catch (error) {
+      console.error('❌ 显示删除确认对话框失败:', error);
+      this.showNotification('无法显示删除对话框', 'error');
+    }
+  }
+  
+  /**
+   * 执行删除书签操作
+   * @param {Object} link - 链接对象
+   * @param {HTMLElement} card - 卡片元素
+   * @returns {boolean} 是否关闭对话框
+   */
+  async executeDeleteBookmark(link, card) {
+    try {
+      console.log(`🗑️ 删除书签: ${link.title}`);
+      
+      // 获取应用实例
+      const app = window.linkBoardApp;
+      if (!app || !app.bookmarkManager) {
+        throw new Error('书签管理器不可用');
+      }
+      
+      // 执行删除操作
+      const success = await app.bookmarkManager.removeBookmark(link.id);
+      
+      if (success) {
+        // 删除成功
+        this.showNotification(`书签"${link.title}"已删除`, 'success');
+        
+        // 从界面中移除卡片元素
+        if (card && card.parentNode) {
+          // 添加删除动画
+          card.style.transition = 'all 0.3s ease';
+          card.style.transform = 'scale(0.8)';
+          card.style.opacity = '0';
+          
+          // 延迟移除DOM元素
+          setTimeout(() => {
+            if (card.parentNode) {
+              card.parentNode.removeChild(card);
+            }
+          }, 300);
+        }
+        
+        // 从当前链接列表中移除
+        this.currentLinks = this.currentLinks.filter(l => l.id !== link.id);
+        this.filteredLinks = this.filteredLinks.filter(l => l.id !== link.id);
+        
+        // 数据更新事件将由ToolboxApp.handleBookmarkUpdate自动处理
+        
+        // 更新页面标题（显示新的数量）
+        this.updatePageTitle();
+        
+        // 返回true表示可以关闭对话框
+        return true;
+        
+      } else {
+        throw new Error('删除操作失败');
+      }
+      
+    } catch (error) {
+      console.error('❌ 删除书签失败:', error);
+      this.showNotification(`删除失败: ${error.message}`, 'error');
+      
+      // 返回false表示不关闭对话框
+      return false;
+    }
   }
   
   // ==================== 生命周期方法重写 ====================
