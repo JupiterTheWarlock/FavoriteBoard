@@ -64,6 +64,18 @@ class TabContainer {
    */
   setContentContainer(container) {
     this.contentContainer = container;
+    
+    // 确保容器存在且有正确的样式
+    if (this.contentContainer) {
+      // 确保容器有正确的类名
+      if (!this.contentContainer.classList.contains('tab-content-container')) {
+        this.contentContainer.classList.add('tab-content-container');
+      }
+      
+      // 确保容器可见
+      this.contentContainer.style.display = 'block';
+    }
+    
     console.log('📦 设置Tab内容容器:', container);
   }
   

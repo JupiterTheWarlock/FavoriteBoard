@@ -189,7 +189,10 @@ class StateManager {
       // 使用DataProcessor处理数据
       const folderTree = DataProcessor.generateFolderTree(bookmarksData);
       const allLinks = DataProcessor.generateAllLinks(bookmarksData);
-      const folderMap = DataProcessor.buildFolderMap(folderTree);
+      
+      // 传入原始的folderMap数据来构建映射表
+      const originalFolderMap = bookmarksData?.folderMap || {};
+      const folderMap = DataProcessor.buildFolderMap(folderTree, originalFolderMap);
       
       // 更新数据状态
       this.setDataState({

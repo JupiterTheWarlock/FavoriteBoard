@@ -13,9 +13,16 @@ class ToolboxApp {
     
     // Tab管理相关
     this.tabContainer = null;  // Tab容器
+    this.tabFactory = null;
+    this.currentTab = null;
+    this.registeredTabs = new Map();
     
     // 数据管理
     this.bookmarkManager = new BookmarkManager();
+    this.allLinks = [];
+    this.folderTree = [];
+    this.folderMap = new Map();
+    this.isLoading = true;
     
     // UI元素缓存
     this.searchInput = null;
@@ -23,6 +30,9 @@ class ToolboxApp {
     // 文件夹右键菜单相关
     this.currentFolderContextMenu = null;
     this.currentFolderForContext = null;
+    
+    // Tab右键菜单相关
+    this.tabContextMenu = null;
     
     console.log('🐱 主应用初始化开始...');
     
@@ -389,6 +399,9 @@ class ToolboxApp {
     // 文件夹树展开/折叠事件
     this.bindTreeToggleEvents();
     
+    // Tab右键菜单事件
+    this.bindTabContextMenuEvents();
+    
     // 窗口大小变化事件
     this.bindWindowEvents();
     
@@ -440,23 +453,30 @@ class ToolboxApp {
         // 切换到Dashboard
         this.switchToTab('dashboard');
       } else if (folderId) {
-        // 切换到收藏夹Tab
-        const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
-        const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
-        const folderData = folderMap.get(folderId);
-        console.log(`📁 文件夹数据:`, folderData);
-        console.log(`🗂️ 文件夹映射表大小: ${folderMap.size}`);
-        console.log(`📊 所有链接数量: ${allLinks.length}`);
-        
-        // 修复：正确传递参数给switchToTab方法
-        // 原来的代码：this.switchToTab('bookmark', folderId, folderData);
-        // 修复后的代码：
-        this.switchToTab('bookmark', folderId, {
-          data: {
-            folderId: folderId,
-            folderData: folderData
+        try {
+          // 安全获取文件夹数据
+          const folderMap = this.stateManager?.getStateValue('data.folderMap');
+          if (!folderMap || !(folderMap instanceof Map)) {
+            console.warn(`🐱 文件夹映射表不可用或格式不正确`);
+            this.showNotification('无法切换到此文件夹，数据不可用', 'error');
+            return;
           }
-        });
+          
+          // 获取文件夹数据
+          const folderData = folderMap.get(folderId);
+          console.log(`📁 文件夹数据:`, folderData);
+          
+          // 切换到收藏夹Tab
+          this.switchToTab('bookmark', folderId, {
+            data: {
+              folderId: folderId,
+              folderData: folderData
+            }
+          });
+        } catch (error) {
+          console.error('❌ 切换到文件夹失败:', error);
+          this.showNotification('切换文件夹时发生错误', 'error');
+        }
       }
     });
     
@@ -478,6 +498,62 @@ class ToolboxApp {
     
     // 绑定全局点击事件隐藏右键菜单
     this.bindFolderContextMenuEvents();
+  }
+  
+  /**
+   * 绑定Tab右键菜单事件
+   */
+  bindTabContextMenuEvents() {
+    // 获取Tab标题区域
+    const categoryInfo = document.getElementById('categoryInfo');
+    if (!categoryInfo) {
+      console.warn('⚠️ 找不到Tab标题区域元素');
+      return;
+    }
+    
+    // 绑定右键菜单事件
+    categoryInfo.addEventListener('contextmenu', (e) => {
+      // 获取当前激活的Tab
+      const activeTab = this.tabContainer.getActiveTab();
+      if (!activeTab) return;
+      
+      // 发布Tab右键菜单请求事件
+      this.eventBus.emit('tab-context-menu-requested', {
+        event: e,
+        tab: activeTab
+      });
+      
+      // 阻止默认右键菜单
+      e.preventDefault();
+    });
+    
+    // 创建Tab右键菜单管理器（如果尚未创建）
+    if (!this.tabContextMenu) {
+      this.tabContextMenu = new TabContextMenu(this.eventBus);
+    }
+    
+    // 监听Tab右键菜单动作
+    this.eventBus.on('tab-context-menu-action', (data) => {
+      const { action, tab } = data;
+      
+      switch (action) {
+        case 'refresh':
+          this.refreshBookmarkData('manual-refresh');
+          break;
+        case 'openAll':
+          if (tab.id === 'bookmark' && tab.currentLinks) {
+            this.openAllLinks(tab.currentLinks);
+          }
+          break;
+        case 'export':
+          if (tab.id === 'bookmark' && tab.currentLinks) {
+            this.exportLinks(tab.currentLinks);
+          }
+          break;
+      }
+    });
+    
+    console.log('✅ Tab右键菜单事件绑定完成');
   }
   
   /**
@@ -587,25 +663,60 @@ class ToolboxApp {
    * 渲染文件夹树
    */
   renderFolderTree() {
-    const folderTreeContainer = document.getElementById('folderTree');
-    if (!folderTreeContainer) return;
-    
-    // 清空现有内容
-    folderTreeContainer.innerHTML = '';
-    
-    // 添加Dashboard节点
-    const dashboardNode = this.createDashboardNode();
-    folderTreeContainer.appendChild(dashboardNode);
-    
-    // 从StateManager获取文件夹树数据
-    const folderTree = this.stateManager.getStateValue('data.folderTree') || [];
-    
-    // 渲染文件夹树
-    folderTree.forEach(node => {
-      this.renderTreeNode(node, folderTreeContainer, 0);
-    });
-    
-    console.log('🌳 文件夹树渲染完成');
+    try {
+      const folderTreeContainer = document.getElementById('folderTree');
+      if (!folderTreeContainer) {
+        console.warn('⚠️ 找不到文件夹树容器元素');
+        return;
+      }
+      
+      // 清空现有内容
+      folderTreeContainer.innerHTML = '';
+      
+      // 添加Dashboard节点
+      const dashboardNode = this.createDashboardNode();
+      folderTreeContainer.appendChild(dashboardNode);
+      
+      // 从StateManager安全获取文件夹树数据
+      const folderTree = this.stateManager?.getStateValue('data.folderTree');
+      if (!folderTree || !Array.isArray(folderTree)) {
+        console.warn('⚠️ 文件夹树数据不可用或格式不正确');
+        
+        // 添加空状态提示
+        const emptyNode = document.createElement('div');
+        emptyNode.className = 'empty-tree';
+        emptyNode.innerHTML = '<div class="empty-tree-message">暂无文件夹数据</div>';
+        folderTreeContainer.appendChild(emptyNode);
+        
+        return;
+      }
+      
+      // 渲染文件夹树
+      if (folderTree.length > 0) {
+        folderTree.forEach(node => {
+          if (node) {
+            this.renderTreeNode(node, folderTreeContainer, 0);
+          }
+        });
+        console.log('🌳 文件夹树渲染完成');
+      } else {
+        // 添加空状态提示
+        const emptyNode = document.createElement('div');
+        emptyNode.className = 'empty-tree';
+        emptyNode.innerHTML = '<div class="empty-tree-message">暂无文件夹数据</div>';
+        folderTreeContainer.appendChild(emptyNode);
+        
+        console.log('🌳 文件夹树为空');
+      }
+    } catch (error) {
+      console.error('❌ 渲染文件夹树失败:', error);
+      
+      // 尝试恢复显示
+      const folderTreeContainer = document.getElementById('folderTree');
+      if (folderTreeContainer) {
+        folderTreeContainer.innerHTML = '<div class="error-tree">加载文件夹失败</div>';
+      }
+    }
   }
   
   /**
@@ -685,24 +796,52 @@ class ToolboxApp {
    * @param {string} folderId - 文件夹ID
    */
   toggleTreeNode(folderId) {
-    const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
-    const folder = folderMap.get(folderId);
-    if (!folder || !folder.children || folder.children.length === 0) return;
-    
-    // 获取当前激活的Tab信息
-    const activeTab = this.tabContainer.getActiveTab();
-    const activeTabType = activeTab?.id;
-    const activeTabInstanceId = this.tabContainer.getTabInstanceId(activeTab);
-    
-    // 切换展开状态
-    folder.isExpanded = !folder.isExpanded;
-    
-    // 重新渲染文件夹树（但不重新绑定事件）
-    this.renderFolderTree();
-    
-    // 恢复Tab选中状态
-    if (activeTabType && activeTabInstanceId) {
-      this.updateFolderTreeSelection(activeTabType, activeTabInstanceId);
+    try {
+      // 安全获取folderMap
+      const folderMap = this.stateManager?.getStateValue('data.folderMap');
+      if (!folderMap || !(folderMap instanceof Map)) {
+        console.warn(`🐱 文件夹映射表不可用或格式不正确`);
+        this.showNotification('无法展开/折叠文件夹，数据不可用', 'error');
+        return;
+      }
+      
+      // 安全获取folder
+      const folder = folderMap.get(folderId);
+      if (!folder) {
+        console.warn(`🐱 文件夹数据不存在: ${folderId}`);
+        this.showNotification('无法找到此文件夹的数据', 'error');
+        return;
+      }
+      
+      // 检查是否有子节点
+      if (!folder.children || folder.children.length === 0) {
+        console.log(`📁 文件夹 ${folder.title} 没有子节点`);
+        return;
+      }
+      
+      // 获取当前激活的Tab信息
+      const activeTab = this.tabContainer?.getActiveTab();
+      const activeTabType = activeTab?.id;
+      const activeTabInstanceId = activeTab ? this.tabContainer.getTabInstanceId(activeTab) : null;
+      
+      // 切换展开状态
+      folder.isExpanded = !folder.isExpanded;
+      
+      // 重新渲染文件夹树（但不重新绑定事件）
+      this.renderFolderTree();
+      
+      // 恢复Tab选中状态
+      if (activeTabType && activeTabInstanceId) {
+        this.updateFolderTreeSelection(activeTabType, activeTabInstanceId);
+      }
+      
+      // 保存展开状态到本地存储
+      this.saveFolderExpandedStates();
+      
+      console.log(`🔄 切换文件夹 ${folder.title} 展开状态: ${folder.isExpanded ? '展开' : '折叠'}`);
+    } catch (error) {
+      console.error('❌ 切换文件夹展开状态失败:', error);
+      this.showNotification('操作文件夹时发生错误', 'error');
     }
   }
   
@@ -733,62 +872,124 @@ class ToolboxApp {
    * @param {HTMLElement} treeItem - 树节点元素
    */
   showFolderContextMenu(event, folderId, treeItem) {
-    // 隐藏之前的菜单
-    this.hideFolderContextMenu();
-    
-    const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
-    const folderData = folderMap.get(folderId);
-    if (!folderData) {
-      console.warn(`🐱 文件夹数据不存在: ${folderId}`);
-      return;
+    try {
+      // 隐藏之前的菜单
+      this.hideFolderContextMenu();
+      
+      // 安全获取folderMap
+      const folderMap = this.stateManager?.getStateValue('data.folderMap');
+      
+      if (!folderMap || !(folderMap instanceof Map)) {
+        console.warn(`🐱 文件夹映射表不可用或格式不正确`);
+        this.showNotification('无法显示文件夹菜单，数据不可用', 'error');
+        return;
+      }
+
+      // 安全获取folderData
+      let folderData = folderMap.get(folderId);
+
+      // 如果在folderMap中找不到，尝试从bookmarkManager的缓存中获取
+      if (!folderData && this.bookmarkManager && this.bookmarkManager.cache) {
+        // 尝试从原始的folderMap获取
+        const originalFolderMap = this.bookmarkManager.cache.folderMap;
+        if (originalFolderMap && originalFolderMap[folderId]) {
+          const originalData = originalFolderMap[folderId];
+          folderData = {
+            id: folderId,
+            title: originalData.title || '未知文件夹',
+            parentId: originalData.parentId,
+            bookmarkCount: originalData.bookmarkCount || 0,
+            path: originalData.path,
+            dateAdded: originalData.dateAdded,
+            children: [],
+            isExpanded: false,
+            icon: '📁'
+          };
+        }
+        
+        // 尝试从tree中查找
+        if (!folderData && this.bookmarkManager.cache.tree) {
+          const findInTree = (nodes) => {
+            for (const node of nodes) {
+              if (node.id === folderId) {
+                return {
+                  id: node.id,
+                  title: node.title || '未知文件夹',
+                  parentId: node.parentId,
+                  bookmarkCount: 0,
+                  children: node.children || [],
+                  isExpanded: false,
+                  icon: '📁'
+                };
+              }
+              if (node.children) {
+                const found = findInTree(node.children);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+          
+          folderData = findInTree(this.bookmarkManager.cache.tree);
+        }
+      }
+
+      if (!folderData) {
+        console.warn(`🐱 文件夹数据不存在: ${folderId}`);
+        this.showNotification('无法找到此文件夹的数据', 'error');
+        return;
+      }
+      
+      this.currentFolderForContext = folderData;
+      
+      // 检查是否为根文件夹（可删除性检查）
+      const isRootFolder = this.isRootFolder(folderData);
+      
+      // 创建菜单
+      const menu = document.createElement('div');
+      menu.className = 'folder-context-menu show';
+      menu.innerHTML = `
+        <div class="context-menu-item" data-action="createSubfolder">
+          <span class="icon">📁</span>
+          <span class="menu-text">创建子文件夹</span>
+        </div>
+        <div class="context-menu-item" data-action="rename">
+          <span class="icon">✏️</span>
+          <span class="menu-text">重命名</span>
+        </div>
+        ${!isRootFolder ? `
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item danger" data-action="delete">
+          <span class="icon">🗑️</span>
+          <span class="menu-text">删除文件夹</span>
+        </div>
+        ` : ''}
+      `;
+      
+      // 智能定位菜单
+      const position = calculateSmartMenuPosition(event, menu, {
+        margin: 10,
+        preferRight: true,
+        preferBottom: true
+      });
+      
+      // 设置菜单样式和位置
+      menu.style.position = 'fixed';
+      menu.style.left = position.left + 'px';
+      menu.style.top = position.top + 'px';
+      menu.style.zIndex = '10000';
+      
+      document.body.appendChild(menu);
+      this.currentFolderContextMenu = menu;
+      
+      // 绑定菜单事件
+      this.bindSingleFolderContextMenuEvents(menu, folderData);
+      
+      console.log(`🐱 显示文件夹右键菜单: ${folderData.title}`);
+    } catch (error) {
+      console.error('❌ 显示文件夹右键菜单失败:', error);
+      this.showNotification('显示菜单时发生错误', 'error');
     }
-    
-    this.currentFolderForContext = folderData;
-    
-    // 检查是否为根文件夹（可删除性检查）
-    const isRootFolder = this.isRootFolder(folderData);
-    
-    // 创建菜单
-    const menu = document.createElement('div');
-    menu.className = 'folder-context-menu show';
-    menu.innerHTML = `
-      <div class="context-menu-item" data-action="createSubfolder">
-        <span class="icon">📁</span>
-        <span class="menu-text">创建子文件夹</span>
-      </div>
-      <div class="context-menu-item" data-action="rename">
-        <span class="icon">✏️</span>
-        <span class="menu-text">重命名</span>
-      </div>
-      ${!isRootFolder ? `
-      <div class="context-menu-separator"></div>
-      <div class="context-menu-item danger" data-action="delete">
-        <span class="icon">🗑️</span>
-        <span class="menu-text">删除文件夹</span>
-      </div>
-      ` : ''}
-    `;
-    
-    // 智能定位菜单
-    const position = calculateSmartMenuPosition(event, menu, {
-      margin: 10,
-      preferRight: true,
-      preferBottom: true
-    });
-    
-    // 设置菜单样式和位置
-    menu.style.position = 'fixed';
-    menu.style.left = position.left + 'px';
-    menu.style.top = position.top + 'px';
-    menu.style.zIndex = '10000';
-    
-    document.body.appendChild(menu);
-    this.currentFolderContextMenu = menu;
-    
-    // 绑定菜单事件
-    this.bindSingleFolderContextMenuEvents(menu, folderData);
-    
-    console.log(`🐱 显示文件夹右键菜单: ${folderData.title}，位置:`, position);
   }
   
   /**
@@ -1508,6 +1709,73 @@ class ToolboxApp {
     };
     
     return dialogObj;
+  }
+
+  /**
+   * 打开所有链接
+   * @param {Array} links - 链接数组
+   */
+  openAllLinks(links) {
+    if (!links || links.length === 0) {
+      this.showNotification('没有可打开的链接', 'info');
+      return;
+    }
+    
+    // 限制同时打开的链接数量
+    const maxLinks = 10;
+    const linksToOpen = links.slice(0, maxLinks);
+    
+    linksToOpen.forEach(link => {
+      chrome.tabs.create({ url: link.url, active: false });
+    });
+    
+    if (links.length > maxLinks) {
+      this.showNotification(`已打开前${maxLinks}个链接（共${links.length}个）`, 'info');
+    } else {
+      this.showNotification(`已打开全部${links.length}个链接`, 'success');
+    }
+  }
+
+  /**
+   * 导出链接
+   * @param {Array} links - 链接数组
+   */
+  exportLinks(links) {
+    if (!links || links.length === 0) {
+      this.showNotification('没有可导出的链接', 'info');
+      return;
+    }
+    
+    // 创建导出数据
+    const exportData = links.map(link => ({
+      title: link.title,
+      url: link.url,
+      dateAdded: link.dateAdded
+    }));
+    
+    // 转换为JSON字符串
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    
+    // 创建Blob对象
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    
+    // 创建下载链接
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bookmarks_export_${new Date().toISOString().slice(0, 10)}.json`;
+    
+    // 触发下载
+    document.body.appendChild(a);
+    a.click();
+    
+    // 清理
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+    
+    this.showNotification(`已导出${links.length}个链接`, 'success');
   }
 }
 

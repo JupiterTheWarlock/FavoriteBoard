@@ -330,12 +330,24 @@ body {
   font-style: italic;
 }
 
-/* 空文件夹树提示 */
+/* 空文件夹树状态 */
 .empty-tree {
+  padding: 20px 10px;
   text-align: center;
-  padding: 2rem 1rem;
   color: var(--text-light);
-  font-style: italic;
+}
+
+.empty-tree-message {
+  font-size: 0.9rem;
+  padding: 10px;
+}
+
+/* 错误文件夹树状态 */
+.error-tree {
+  padding: 20px 10px;
+  text-align: center;
+  color: var(--accent-color);
+  font-size: 0.9rem;
 }
 
 /* 主内容区样式 */
@@ -421,30 +433,28 @@ body {
 /* 链接网格样式 */
 .links-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+  padding: 10px 0;
 }
 
 /* 链接卡片样式 */
 .link-card {
   background: var(--white);
   border-radius: var(--radius);
-  padding: 1.5rem;
   box-shadow: var(--shadow);
-  transition: all 0.3s ease;
-  cursor: pointer;
-  border: 1px solid var(--border-color);
+  padding: 1rem;
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
-  animation: fadeInUp 0.3s ease-out;
-  animation-fill-mode: both;
-  will-change: transform, opacity;
-  contain: layout style paint;
+  animation: fadeInUp 0.3s ease-out forwards;
+  opacity: 0;
 }
 
 .link-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
 }
 
 .card-icon[data-loading="true"] {
@@ -1465,16 +1475,22 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
 } 
 
 /* Tab内容容器样式 */
+.tab-content-container {
+  width: 100%;
+  height: auto;
+  min-height: 200px;
+  overflow: visible;
+  margin-top: 20px;
+  padding-bottom: 30px;
+}
+
+/* Tab切换动画 */
 .tab-content {
   width: 100%;
   height: 100%;
   overflow: auto;
   padding: 20px;
   box-sizing: border-box;
-}
-
-/* Tab切换动画 */
-.tab-content {
   opacity: 1;
   transition: opacity 0.3s ease-in-out;
 }
@@ -1515,4 +1531,90 @@ body > .delete-confirm-overlay > .delete-confirm-dialog {
   font-family: monospace;
   font-size: 12px;
   color: #555;
+} 
+
+/* Tab右键菜单特定样式 */
+.tab-context-menu {
+  position: fixed;
+  background: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  padding: 0.5rem 0;
+  min-width: 160px;
+  max-width: 250px;
+  z-index: 99999;
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  animation: fadeIn 0.2s ease-in-out;
+  /* 确保菜单始终可见 */
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.context-menu-icon {
+  margin-right: 0.75rem;
+  font-size: 1rem;
+  width: 16px;
+  text-align: center;
+}
+
+.context-menu-text {
+  font-size: 0.9rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+} 
+
+/* Dashboard容器样式 */
+.dashboard-container {
+  width: 100%;
+  padding: 10px 0;
+}
+
+/* Bookmark Tab内容样式 */
+.bookmark-tab-content {
+  width: 100%;
+  padding: 10px 0;
+}
+
+/* 确保链接网格容器正确显示 */
+.links-grid-container {
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* 确保主内容区域正确显示Tab内容 */
+.main-content {
+  flex: 1;
+  padding: 1.5rem 2rem;
+  margin-left: var(--sidebar-width);
+  overflow-y: auto;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+} 
+
+/* 文件夹右键菜单样式 */
+.folder-context-menu {
+  position: fixed;
+  background: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  padding: 0.5rem 0;
+  min-width: 160px;
+  max-width: 250px;
+  z-index: 99999;
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
+  animation: fadeIn 0.2s ease-in-out;
+  /* 确保菜单始终可见 */
+  pointer-events: auto;
+  box-sizing: border-box;
 } 

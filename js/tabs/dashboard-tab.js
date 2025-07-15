@@ -126,6 +126,9 @@ class DashboardTab extends BaseTab {
   renderStatsPanel(container) {
     const stats = this.statsData;
     
+    // 清空容器
+    container.innerHTML = '';
+    
     // 创建Dashboard主容器
     const dashboard = document.createElement('div');
     dashboard.className = 'dashboard-container';
@@ -177,7 +180,7 @@ class DashboardTab extends BaseTab {
     container.appendChild(dashboard);
     
     // 确保容器可见
-    showElement(container, 'block');
+    container.style.display = 'block';
   }
   
   /**

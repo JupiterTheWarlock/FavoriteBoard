@@ -105,21 +105,79 @@ class DataProcessor {
     /**
      * 构建文件夹映射表
      * @param {Array} folderTree - 文件夹树
+     * @param {Object} originalFolderMap - 原始的文件夹映射表（从bookmarkCache来的）
      * @returns {Map} 文件夹映射表
      */
-    static buildFolderMap(folderTree) {
+    static buildFolderMap(folderTree, originalFolderMap = {}) {
       const map = new Map();
       
+      // 首先添加原始folderMap中的数据
+      if (originalFolderMap && typeof originalFolderMap === 'object') {
+        Object.keys(originalFolderMap).forEach(folderId => {
+          const folderData = originalFolderMap[folderId];
+          if (folderData) {
+            const mappedData = {
+              id: folderId,
+              title: folderData.title || '未知文件夹',
+              parentId: folderData.parentId,
+              bookmarkCount: folderData.bookmarkCount || 0,
+              path: folderData.path,
+              dateAdded: folderData.dateAdded,
+              children: [],
+              isExpanded: false,
+              icon: DataProcessor.getFolderIcon(folderData.title || '', 0)
+            };
+            
+            // 存储字符串版本的key
+            map.set(folderId, mappedData);
+            
+            // 如果folderId是数字字符串，也存储数字版本的key
+            if (!isNaN(folderId)) {
+              map.set(parseInt(folderId), mappedData);
+            }
+            
+            // 如果folderId是数字，也存储字符串版本的key
+            if (typeof folderId === 'number') {
+              map.set(folderId.toString(), mappedData);
+            }
+          }
+        });
+      }
+      
+      // 然后遍历folderTree，更新和补充数据
       const traverseTree = (nodes) => {
         nodes.forEach(node => {
-          map.set(node.id, node);
-          if (node.children && node.children.length > 0) {
-            traverseTree(node.children);
+          if (node && node.id) {
+            // 如果Map中已存在该文件夹，则更新；否则添加新的
+            const existingData = map.get(node.id);
+            const updatedData = existingData ? 
+              { ...existingData, ...node } : 
+              { ...node };
+            
+            // 存储字符串版本的key
+            map.set(node.id, updatedData);
+            
+            // 如果node.id是数字字符串，也存储数字版本的key
+            if (!isNaN(node.id)) {
+              map.set(parseInt(node.id), updatedData);
+            }
+            
+            // 如果node.id是数字，也存储字符串版本的key
+            if (typeof node.id === 'number') {
+              map.set(node.id.toString(), updatedData);
+            }
+            
+            if (node.children && node.children.length > 0) {
+              traverseTree(node.children);
+            }
           }
         });
       };
       
       traverseTree(folderTree);
+      
+      console.log(`🗂️ 构建文件夹映射表完成: ${map.size} 个文件夹`);
+      
       return map;
     }
     

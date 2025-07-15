@@ -155,13 +155,16 @@ class BookmarkTab extends BaseTab {
     
     // 创建主容器
     const bookmarkContainer = document.createElement('div');
-    bookmarkContainer.className = 'bookmark-tab-container';
+    bookmarkContainer.className = 'bookmark-tab-content';
     
     // 渲染链接网格
     const linksGrid = this.renderLinksGrid();
     bookmarkContainer.appendChild(linksGrid);
     
     container.appendChild(bookmarkContainer);
+    
+    // 确保容器可见
+    container.style.display = 'block';
   }
   
   /**
