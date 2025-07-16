@@ -672,3 +672,26 @@ function bindStandardCardInteraction(card, link, options = {}) {
 window.CardInteractionManager = CardInteractionManager;
 window.createCardInteractionManager = createCardInteractionManager;
 window.bindStandardCardInteraction = bindStandardCardInteraction; 
+
+/**
+ * 提供全局API：moveBookmarkToFolder
+ * 适用于content script环境，直接调用chrome.bookmarks.move
+ * @param {string} bookmarkId - 书签ID
+ * @param {string} targetFolderId - 目标文件夹ID
+ * @returns {Promise<void>}
+ */
+window.moveBookmarkToFolder = function(bookmarkId, targetFolderId) {
+  return new Promise((resolve, reject) => {
+    if (!bookmarkId || !targetFolderId) {
+      reject(new Error('参数缺失'));
+      return;
+    }
+    chrome.bookmarks.move(bookmarkId, { parentId: targetFolderId }, (result) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve(result);
+      }
+    });
+  });
+}; 

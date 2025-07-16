@@ -1,0 +1,136 @@
+/* FavoriteBoard 悬浮窗样式 - folder-selector-popup.css */
+
+#favoriteboard-folder-selector-float {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  z-index: 999999;
+  width: 340px;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  border-radius: 12px;
+  overflow: hidden;
+  font-family: inherit;
+  transition: opacity 0.2s;
+  opacity: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#favoriteboard-folder-selector-float .folder-selector {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+#favoriteboard-folder-selector-float .folder-selector-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#favoriteboard-folder-selector-float .folder-selector-item.selected {
+  background: #f0f6ff;
+}
+#favoriteboard-folder-selector-float .folder-selector-item.disabled {
+  color: #bbb;
+  cursor: not-allowed;
+  background: none;
+}
+#favoriteboard-folder-selector-float .folder-selector-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+#favoriteboard-folder-selector-float .folder-selector-icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+#favoriteboard-folder-selector-float .folder-selector-title {
+  flex: 1;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#favoriteboard-folder-selector-float .folder-selector-count {
+  margin-left: 8px;
+  color: #888;
+  font-size: 13px;
+}
+#favoriteboard-folder-selector-float .folder-selector-disabled-hint {
+  margin-left: 8px;
+  color: #e66;
+  font-size: 12px;
+}
+#favoriteboard-folder-selector-float .folder-selector-empty {
+  text-align: center;
+  color: #bbb;
+  padding: 32px 0;
+}
+#favoriteboard-folder-selector-float .folder-selector-empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+#favoriteboard-folder-selector-float .folder-selector-empty-message {
+  font-size: 15px;
+}
+
+#favoriteboard-folder-selector-float .fb-float-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px 20px;
+  font-weight: bold;
+  font-size: 16px;
+  user-select: none;
+}
+#favoriteboard-folder-selector-float #fb-float-title {
+  cursor: pointer;
+  color: #1a6ae3;
+  transition: color 0.15s;
+}
+#favoriteboard-folder-selector-float #fb-float-title:hover {
+  color: #e66;
+}
+#favoriteboard-folder-selector-float #fb-float-close {
+  position: relative;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+}
+#favoriteboard-folder-selector-float svg {
+  display: block;
+}
+
+#favoriteboard-folder-selector-float .fb-float-footer {
+  text-align: right;
+  padding: 0 20px 16px 20px;
+}
+#favoriteboard-folder-selector-float #fb-float-settings {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+#favoriteboard-folder-selector-float #fb-float-settings:hover {
+  background: #f0f6ff;
+  color: #1a6ae3;
+}
+
+@media (max-width: 600px) {
+  #favoriteboard-folder-selector-float {
+    right: 8px;
+    top: 8px;
+    width: 98vw;
+    max-width: 360px;
+  }
+} 

@@ -224,6 +224,19 @@ chrome.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
 chrome.bookmarks.onChanged.addListener(handleBookmarkChanged);
 chrome.bookmarks.onMoved.addListener(handleBookmarkMoved);
 
+// 监听新书签创建，通知当前活动tab弹出悬浮窗
+chrome.bookmarks.onCreated.addListener((id, bookmark) => {
+  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, {
+        type: 'show-folder-selector-float',
+        bookmarkId: id,
+        bookmark: bookmark
+      });
+    }
+  });
+});
+
 // 处理收藏夹创建
 async function handleBookmarkCreated(id, bookmark) {
   console.log('➕ Bookmark created:', bookmark.title);
