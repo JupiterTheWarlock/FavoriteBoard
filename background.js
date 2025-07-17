@@ -342,6 +342,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+// 监听内容脚本请求打开主页面（与扩展按钮点击行为一致）
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'openMainPage') {
+    (async () => {
+      const hash = message.hash || '';
+      const url = chrome.runtime.getURL('index.html') + (hash || '');
+      const tabs = await chrome.tabs.query({url: chrome.runtime.getURL('index.html')});
+      let found = false;
+      for (const tab of tabs) {
+        // 如果hash参数存在，且已有标签页hash不一致，则新开
+        if (hash && !tab.url.endsWith(hash)) continue;
+        await chrome.tabs.update(tab.id, {active: true});
+        await chrome.windows.update(tab.windowId, {focused: true});
+        found = true;
+        break;
+      }
+      if (!found) {
+        await chrome.tabs.create({ url });
+      }
+    })();
+  }
+});
+
 // 获取收藏夹缓存
 async function handleGetBookmarksCache() {
   try {

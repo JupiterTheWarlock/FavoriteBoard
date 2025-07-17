@@ -23,10 +23,10 @@
     const float = document.createElement('div');
     float.id = FLOAT_ID;
     float.style.position = 'fixed';
-    float.style.top = '32px';
-    float.style.right = '32px';
+    float.style.top = '0'; // 顶到页面最上方
+    float.style.right = '0'; // 顶到页面最右侧
     float.style.zIndex = '999999';
-    float.style.width = '340px';
+    float.style.width = '170px'; // 原来340px，减半
     float.style.background = '#fff';
     float.style.boxShadow = '0 4px 24px rgba(0,0,0,0.18)';
     float.style.borderRadius = '12px';
@@ -40,9 +40,9 @@
     header.style.display = 'flex';
     header.style.alignItems = 'center';
     header.style.justifyContent = 'space-between';
-    header.style.padding = '16px 20px 8px 20px';
+    header.style.padding = '8px 8px 4px 8px'; // 原来16px 20px 8px 20px，减小
     header.style.fontWeight = 'bold';
-    header.style.fontSize = '16px';
+    header.style.fontSize = '15px';
     header.style.userSelect = 'none';
     header.innerHTML = `
       <span id="fb-float-title" style="cursor:pointer;">FavoriteBoard</span>
@@ -57,14 +57,14 @@
     // 中部：FolderSelector容器
     const selectorWrap = document.createElement('div');
     selectorWrap.id = 'fb-float-folder-selector-wrap';
-    selectorWrap.style.padding = '0 20px 12px 20px';
+    selectorWrap.style.padding = '0 8px 8px 8px'; // 原来0 20px 12px 20px，减小
     float.appendChild(selectorWrap);
 
     // 底部：设置按钮
     const footer = document.createElement('div');
     footer.style.textAlign = 'right';
-    footer.style.padding = '0 20px 16px 20px';
-    footer.innerHTML = '<button id="fb-float-settings" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px;">设置</button>';
+    footer.style.padding = '0 8px 8px 8px'; // 原来0 20px 16px 20px，减小
+    footer.innerHTML = '<button id="fb-float-settings" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;">设置</button>';
     float.appendChild(footer);
 
     // 插入DOM
@@ -76,11 +76,11 @@
     // 事件绑定
     closeBtn.onclick = removeFloat;
     header.querySelector('#fb-float-title').onclick = () => {
-      window.open(chrome.runtime.getURL('index.html'));
+      chrome.runtime.sendMessage({ action: 'openMainPage' });
       removeFloat();
     };
     footer.querySelector('#fb-float-settings').onclick = () => {
-      window.open(chrome.runtime.getURL('index.html#settings'));
+      chrome.runtime.sendMessage({ action: 'openMainPage', hash: '#settings' });
       removeFloat();
     };
 
