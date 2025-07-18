@@ -228,4 +228,5 @@
 
   // 提供全局关闭方法（便于调试）
   window.FBFolderSelectorFloat = { close: removeFloat };
+  
 })(); 
