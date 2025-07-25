@@ -37,7 +37,6 @@
     {
       "matches": ["<all_urls>"],
       "js": [
-        "js/floatWindow/folder-selector-float.js",
         "js/ui/folder-selector.js",
         "js/utils/card-interaction-utils.js"
       ],
