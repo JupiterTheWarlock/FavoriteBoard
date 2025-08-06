@@ -1,51 +1,6 @@
 // UI工具函数
 
-// getFaviconUrl 函数已删除 - 未在项目中使用
-
-/**
- * 获取默认链接图标
- * @returns {string} 默认图标的data URI
- */
-function getDefaultLinkIcon() {
-    return 'data:image/svg+xml;base64,' + btoa(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#7f8c8d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-    `);
-}
-
-/**
- * 验证图标URL是否有效
- * @param {string} iconUrl - 图标URL
- * @returns {boolean} 是否有效
- */
-function isValidIconUrl(iconUrl) {
-    if (!iconUrl || typeof iconUrl !== 'string' || iconUrl.trim() === '') {
-        return false;
-    }
-    
-    // 检查是否是有效的URL或data URI
-    return isValidUrl(iconUrl) || iconUrl.startsWith('data:');
-}
-
-/**
- * 获取安全的图标URL
- * @param {string} iconUrl - 图标URL
- * @param {string} fallbackUrl - 备用URL
- * @returns {string} 安全的图标URL
- */
-function getSafeIconUrl(iconUrl, fallbackUrl = null) {
-    if (isValidIconUrl(iconUrl)) {
-        return iconUrl;
-    }
-    
-    if (fallbackUrl && isValidIconUrl(fallbackUrl)) {
-        return fallbackUrl;
-    }
-    
-    return getDefaultLinkIcon();
-}
+// 图标处理函数已移至 tab-utils.js，请使用 window.getSafeIcon, window.getDefaultIcon 等
 
 // showNotification 函数已移除 - 请使用 NotificationManager 或通过 UIManager.showNotification()
 
@@ -146,4 +101,12 @@ function calculateSmartMenuPosition(event, menu, options = {}) {
     top = Math.max(margin, Math.min(top, viewportHeight - menuHeight - margin));
     
     return { left, top };
-} 
+}
+
+// ==================== 导出到全局作用域 ====================
+
+window.calculateSmartMenuPosition = calculateSmartMenuPosition;
+
+window.UIUtils = {
+    calculateSmartMenuPosition
+}; 

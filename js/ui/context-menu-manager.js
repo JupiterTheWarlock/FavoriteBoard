@@ -157,13 +157,118 @@ class ContextMenuManager {
   }
   
   /**
+   * 显示书签右键菜单
+   * @param {Event} event - 鼠标右键事件
+   * @param {Object} bookmarkData - 书签数据
+   */
+  showBookmarkMenu(event, bookmarkData) {
+    try {
+      console.log(`🎯 显示书签右键菜单: ${bookmarkData.title}`);
+      
+      // 隐藏现有菜单
+      this.hideAllMenus();
+      
+      // 创建菜单项
+      const menuItems = [
+        {
+          icon: '🆕',
+          text: '新窗口打开',
+          action: 'openNewWindow',
+          enabled: true
+        },
+        {
+          icon: '📋',
+          text: '复制链接',
+          action: 'copyLink',
+          enabled: true
+        },
+        { type: 'separator' },
+        {
+          icon: '⭐',
+          text: '设为常用网页',
+          action: 'setFrequentlyUsed',
+          enabled: true
+        },
+        { type: 'separator' },
+        {
+          icon: '✏️',
+          text: '编辑',
+          action: 'edit',
+          enabled: true
+        },
+        {
+          icon: '🗑️',
+          text: '删除',
+          action: 'delete',
+          enabled: true,
+          danger: true
+        }
+      ];
+      
+      // 创建并显示菜单
+      const menu = this.createMenu(event, menuItems, 'bookmark', bookmarkData);
+      this.showMenu(menu, event);
+      
+    } catch (error) {
+      console.error('❌ 显示书签右键菜单失败:', error);
+    }
+  }
+  
+  /**
+   * 显示常用网页右键菜单
+   * @param {Event} event - 鼠标右键事件
+   * @param {string} url - 网页URL
+   * @param {string} title - 网页标题
+   */
+  showFrequentlyUsedContextMenu(event, url, title) {
+    try {
+      console.log(`🎯 显示常用网页右键菜单: ${title}`);
+      
+      // 隐藏现有菜单
+      this.hideAllMenus();
+      
+      // 创建菜单项
+      const menuItems = [
+        {
+          icon: '🆕',
+          text: '新窗口打开',
+          action: 'openNewWindow',
+          enabled: true
+        },
+        {
+          icon: '📋',
+          text: '复制链接',
+          action: 'copyLink',
+          enabled: true
+        },
+        { type: 'separator' },
+        {
+          icon: '🗑️',
+          text: '移除常用网页',
+          action: 'removeFrequentlyUsed',
+          enabled: true,
+          danger: true
+        }
+      ];
+      
+      // 创建并显示菜单
+      const menu = this.createMenu(event, menuItems, 'frequently-used', { url, title });
+      this.showMenu(menu, event);
+      
+    } catch (error) {
+      console.error('❌ 显示常用网页右键菜单失败:', error);
+    }
+  }
+  
+  /**
    * 创建菜单
    * @param {Event} event - 鼠标事件
    * @param {Array} menuItems - 菜单项配置
-   * @param {string} menuType - 菜单类型 ('folder', 'tab')
+   * @param {string} menuType - 菜单类型 ('folder', 'tab', 'frequently-used')
+   * @param {Object} contextData - 额外的上下文数据
    * @returns {Object} 菜单对象
    */
-  createMenu(event, menuItems, menuType) {
+  createMenu(event, menuItems, menuType, contextData = null) {
     const menuId = `context-menu-${++this.menuCounter}`;
     
     // 创建菜单容器
@@ -196,6 +301,7 @@ class ContextMenuManager {
       id: menuId,
       element: menuElement,
       type: menuType,
+      contextData: contextData,
       isVisible: false,
       
       show: () => {
@@ -323,7 +429,7 @@ class ContextMenuManager {
       e.stopPropagation();
       
       // 处理菜单动作
-      this.handleMenuAction(menu.type, action);
+      this.handleMenuAction(menu.type, action, menu);
       
       // 隐藏菜单
       menu.hide();
@@ -334,8 +440,9 @@ class ContextMenuManager {
    * 处理菜单动作
    * @param {string} menuType - 菜单类型
    * @param {string} action - 动作类型
+   * @param {Object} menu - 菜单对象（包含上下文数据）
    */
-  handleMenuAction(menuType, action) {
+  handleMenuAction(menuType, action, menu = null) {
     try {
       console.log(`🎯 处理菜单动作: ${menuType} - ${action}`);
       
@@ -343,6 +450,10 @@ class ContextMenuManager {
         this.handleFolderMenuAction(action);
       } else if (menuType === 'tab') {
         this.handleTabMenuAction(action);
+      } else if (menuType === 'frequently-used') {
+        this.handleFrequentlyUsedMenuAction(action, menu);
+      } else if (menuType === 'bookmark') {
+        this.handleBookmarkMenuAction(action, menu);
       }
       
     } catch (error) {
@@ -394,6 +505,102 @@ class ContextMenuManager {
       action,
       tab
     });
+  }
+  
+  /**
+   * 处理常用网页菜单动作
+   * @param {string} action - 动作类型
+   * @param {Object} menu - 菜单对象
+   */
+  handleFrequentlyUsedMenuAction(action, menu) {
+    if (!menu || !menu.contextData) {
+      console.warn('⚠️ 常用网页上下文数据不可用');
+      return;
+    }
+    
+    const { url, title } = menu.contextData;
+    
+    switch (action) {
+      case 'openNewWindow':
+        window.open(url, '_blank');
+        break;
+      case 'copyLink':
+        navigator.clipboard.writeText(url).then(() => {
+          this.eventBus.emit('notification-requested', {
+            message: '链接已复制到剪贴板',
+            type: 'success'
+          });
+        }).catch(() => {
+          this.eventBus.emit('notification-requested', {
+            message: '复制失败，请手动复制',
+            type: 'error'
+          });
+        });
+        break;
+      case 'removeFrequentlyUsed':
+        // 发布移除常用网页事件
+        this.eventBus.emit('frequently-used-remove-requested', {
+          url,
+          title
+        });
+        break;
+      default:
+        console.warn(`⚠️ 未知的常用网页菜单动作: ${action}`);
+    }
+  }
+  
+  /**
+   * 处理书签菜单动作
+   * @param {string} action - 动作类型
+   * @param {Object} menu - 菜单对象
+   */
+  handleBookmarkMenuAction(action, menu) {
+    if (!menu || !menu.contextData) {
+      console.warn('⚠️ 书签上下文数据不可用');
+      return;
+    }
+    
+    const bookmarkData = menu.contextData;
+    
+    switch (action) {
+      case 'openNewWindow':
+        window.open(bookmarkData.url, '_blank');
+        break;
+      case 'copyLink':
+        navigator.clipboard.writeText(bookmarkData.url).then(() => {
+          this.eventBus.emit('notification-requested', {
+            message: '链接已复制到剪贴板',
+            type: 'success'
+          });
+        }).catch(() => {
+          this.eventBus.emit('notification-requested', {
+            message: '复制失败，请手动复制',
+            type: 'error'
+          });
+        });
+        break;
+      case 'setFrequentlyUsed':
+        // 发布设为常用网页事件
+        this.eventBus.emit('frequently-used-add-requested', {
+          url: bookmarkData.url,
+          bookmarkData: bookmarkData
+        });
+        break;
+      case 'edit':
+        // 发布编辑书签事件
+        this.eventBus.emit('bookmark-edit-requested', {
+          bookmarkData: bookmarkData
+        });
+        break;
+      case 'delete':
+        // 发布删除书签事件
+        this.eventBus.emit('bookmark-delete-requested', {
+          bookmarkData: bookmarkData
+        });
+        break;
+      default:
+        console.warn(`⚠️ 未知的书签菜单动作: ${action}`);
+    }
   }
   
   /**

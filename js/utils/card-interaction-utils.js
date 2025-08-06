@@ -122,6 +122,7 @@ class CardInteractionManager {
       enableDelete = true,
       enableCopy = true,
       enableNewWindow = true,
+      enableFrequentlyUsed = true,
       customMenuItems = []
     } = config;
     
@@ -151,7 +152,22 @@ class CardInteractionManager {
     }
     
     // 分隔符
-    if ((enableNewWindow || enableCopy) && (enableMove || enableDelete || customMenuItems.length > 0)) {
+    if ((enableNewWindow || enableCopy) && (enableFrequentlyUsed || enableMove || enableDelete || customMenuItems.length > 0)) {
+      menuItems.push('<div class="context-menu-separator"></div>');
+    }
+    
+    // 常用网页菜单项
+    if (enableFrequentlyUsed) {
+      menuItems.push(`
+        <div class="context-menu-item" data-action="setFrequentlyUsed">
+          <span class="icon">⭐</span>
+          <span class="menu-text">设为常用网页</span>
+        </div>
+      `);
+    }
+    
+    // 分隔符
+    if (enableFrequentlyUsed && (enableMove || enableDelete || customMenuItems.length > 0)) {
       menuItems.push('<div class="context-menu-separator"></div>');
     }
     
@@ -260,6 +276,10 @@ class CardInteractionManager {
           await this.copyLinkToClipboard(link.url);
           break;
           
+        case 'setFrequentlyUsed':
+          await this.defaultSetFrequentlyUsedHandler(link, card);
+          break;
+          
         case 'move':
           if (onMoveRequested) {
             onMoveRequested(link, card);
@@ -346,6 +366,33 @@ class CardInteractionManager {
     } catch (error) {
       console.error('❌ 显示移动对话框失败:', error);
       this.options.showNotification('无法显示移动对话框', 'error');
+    }
+  }
+  
+  /**
+   * 默认的设为常用网页处理器
+   * @param {Object} link - 链接对象
+   * @param {HTMLElement} card - 卡片元素
+   */
+  async defaultSetFrequentlyUsedHandler(link, card) {
+    try {
+      console.log(`⭐ 添加常用网页: ${link.title}`);
+      
+      // 获取应用实例
+      const app = this.options.app;
+      if (!app || !app.frequentlyUsedManager) {
+        throw new Error('应用实例或常用网页管理器不可用');
+      }
+      
+      // 直接添加到常用网页
+      await app.frequentlyUsedManager.addFrequentlyUsedWebsite(link.url, link);
+      
+      // 显示成功通知
+      this.options.showNotification(`已添加到常用网页: ${link.title}`, 'success');
+      
+    } catch (error) {
+      console.error('❌ 添加常用网页失败:', error);
+      this.options.showNotification('添加常用网页失败', 'error');
     }
   }
   

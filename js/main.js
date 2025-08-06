@@ -18,6 +18,7 @@ class ToolboxApp {
     
     // 数据管理
     this.bookmarkManager = new BookmarkManager();
+    this.frequentlyUsedManager = null; // 将在initStateManager后初始化
     
     // UI元素缓存
     this.searchInput = null;
@@ -29,6 +30,9 @@ class ToolboxApp {
     
     // 初始化状态管理器
     this.initStateManager();
+    
+    // 初始化常用网页管理器
+    this.initFrequentlyUsedManager();
     
     // 初始化UI管理器
     this.initUIManager();
@@ -61,6 +65,25 @@ class ToolboxApp {
       
     } catch (error) {
       console.error('❌ 状态管理器初始化失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 初始化常用网页管理器
+   */
+  initFrequentlyUsedManager() {
+    try {
+      if (!this.eventBus) {
+        throw new Error('事件总线不可用');
+      }
+      
+      this.frequentlyUsedManager = new FrequentlyUsedManager(this.eventBus);
+      
+      console.log('✅ 常用网页管理器初始化完成');
+      
+    } catch (error) {
+      console.error('❌ 常用网页管理器初始化失败:', error);
       throw error;
     }
   }
@@ -172,6 +195,35 @@ class ToolboxApp {
     
     this.eventBus.on('folder-delete-requested', (data) => {
       this.deleteFolder(data.folderId);
+    }, { unique: true });
+    
+    // 监听常用网页相关事件
+    this.eventBus.on('frequently-used-added', (data) => {
+      console.log('⭐ 常用网页已添加:', data.url);
+      this.showNotification('已添加到常用网页', 'success');
+    }, { unique: true });
+    
+    this.eventBus.on('frequently-used-removed', (data) => {
+      console.log('🗑️ 常用网页已移除:', data.url);
+      this.showNotification('已从常用网页移除', 'info');
+    }, { unique: true });
+    
+    this.eventBus.on('frequently-used-updated', (data) => {
+      console.log('🔄 常用网页已更新:', data.url);
+    }, { unique: true });
+    
+    this.eventBus.on('frequently-used-error', (error) => {
+      console.error('❌ 常用网页操作失败:', error);
+      this.showNotification('操作失败，请稍后重试', 'error');
+    }, { unique: true });
+    
+    // 监听常用网页请求事件
+    this.eventBus.on('frequently-used-add-requested', (data) => {
+      this.addFrequentlyUsedWebsite(data.url, data.bookmarkData);
+    }, { unique: true });
+    
+    this.eventBus.on('frequently-used-remove-requested', (data) => {
+      this.removeFrequentlyUsedWebsite(data.url);
     }, { unique: true });
     
     console.log('✅ 事件总线监听器初始化完成');
@@ -637,6 +689,74 @@ class ToolboxApp {
     } else {
       // Fallback到console输出
       console.log(`[${type.toUpperCase()}] ${message}`);
+    }
+  }
+  
+  // ==================== 常用网页操作API ====================
+  
+  /**
+   * 添加常用网页
+   * @param {string} url - 网页URL
+   * @param {Object} bookmarkData - 收藏夹数据
+   * @returns {Promise<Object>} 添加结果
+   */
+  async addFrequentlyUsedWebsite(url, bookmarkData) {
+    try {
+      console.log('⭐ 添加常用网页:', url);
+      
+      const result = await this.frequentlyUsedManager.addFrequentlyUsedWebsite(url, bookmarkData);
+      
+      // 触发事件通知其他组件
+      this.eventBus.emit('frequently-used-data-changed', {
+        action: 'added',
+        url: url,
+        data: result.data
+      });
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ 添加常用网页失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 移除常用网页
+   * @param {string} url - 网页URL
+   * @returns {Promise<Object>} 移除结果
+   */
+  async removeFrequentlyUsedWebsite(url) {
+    try {
+      console.log('🗑️ 移除常用网页:', url);
+      
+      const result = await this.frequentlyUsedManager.removeFrequentlyUsedWebsite(url);
+      
+      // 触发事件通知其他组件
+      this.eventBus.emit('frequently-used-data-changed', {
+        action: 'removed',
+        url: url,
+        data: result.data
+      });
+      
+      return result;
+      
+    } catch (error) {
+      console.error('❌ 移除常用网页失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 获取常用网页列表
+   * @returns {Promise<Object>} 常用网页数据
+   */
+  async getFrequentlyUsedWebsites() {
+    try {
+      return await this.frequentlyUsedManager.getFrequentlyUsedWebsites();
+    } catch (error) {
+      console.error('❌ 获取常用网页失败:', error);
+      throw error;
     }
   }
   

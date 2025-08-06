@@ -44,7 +44,10 @@ class DashboardTab extends BaseTab {
       await this.collectStatsData(app);
       // 只收集最近活动数据
       await this.collectRecentActivity(app);
-      this.renderRecentActivityPanel(container);
+      
+      // 渲染Dashboard内容
+      this.renderDashboardContent(container);
+      
       this.setupAutoRefresh();
       console.log('✅ Dashboard渲染完成');
     } catch (error) {
@@ -119,14 +122,71 @@ class DashboardTab extends BaseTab {
   }
 
   /**
+   * 渲染Dashboard内容
+   * @param {HTMLElement} container
+   */
+  renderDashboardContent(container) {
+    container.innerHTML = '';
+    
+    // 创建Dashboard容器
+    const dashboard = document.createElement('div');
+    dashboard.className = 'dashboard-container';
+    
+    // 渲染常用网页面板
+    this.renderFrequentlyUsedPanel(dashboard);
+    
+    // 渲染最近活动面板
+    this.renderRecentActivityPanel(dashboard);
+    
+    container.appendChild(dashboard);
+    container.style.display = 'block';
+  }
+  
+  /**
+   * 渲染常用网页面板
+   * @param {HTMLElement} dashboard - Dashboard容器
+   */
+  async renderFrequentlyUsedPanel(dashboard) {
+    try {
+      const app = window.linkBoardApp;
+      if (!app || !app.frequentlyUsedManager) {
+        console.warn('⚠️ FrequentlyUsedManager不可用，跳过常用网页面板渲染');
+        return;
+      }
+      
+      // 创建常用网页面板容器
+      const panelContainer = document.createElement('div');
+      panelContainer.className = 'frequently-used-panel-container';
+      
+      // 创建FrequentlyUsedPanel实例
+      if (!this.frequentlyUsedPanel) {
+        this.frequentlyUsedPanel = new FrequentlyUsedPanel(
+          app.eventBus,
+          app.stateManager,
+          app.frequentlyUsedManager
+        );
+      }
+      
+      // 渲染常用网页面板
+      await this.frequentlyUsedPanel.render(panelContainer);
+      
+      // 添加到Dashboard
+      dashboard.appendChild(panelContainer);
+      
+    } catch (error) {
+      console.error('❌ 渲染常用网页面板失败:', error);
+    }
+  }
+  
+  /**
    * 渲染最近活动面板
    * @param {HTMLElement} container
    */
   renderRecentActivityPanel(container) {
-    container.innerHTML = '';
-    const dashboard = document.createElement('div');
-    dashboard.className = 'dashboard-container';
-    dashboard.innerHTML = `
+    // 创建最近活动面板容器
+    const activityContainer = document.createElement('div');
+    activityContainer.className = 'recent-activity-panel-container';
+    activityContainer.innerHTML = `
       <div class="dashboard-stats">
         <div class="stats-header">
           <h3>⏰ 最近活动</h3>
@@ -137,9 +197,8 @@ class DashboardTab extends BaseTab {
         </div>
       </div>
     `;
-    container.appendChild(dashboard);
-    this.bindActivityCardEvents(dashboard);
-    container.style.display = 'block';
+    container.appendChild(activityContainer);
+    this.bindActivityCardEvents(activityContainer);
   }
 
   /**
@@ -195,7 +254,8 @@ class DashboardTab extends BaseTab {
           enableMove: true,
           enableDelete: true,
           enableCopy: true,
-          enableNewWindow: true
+          enableNewWindow: true,
+          enableFrequentlyUsed: true
         });
         const iconImg = card.querySelector('.activity-icon-img');
         if (iconImg) {
@@ -291,6 +351,10 @@ class DashboardTab extends BaseTab {
       this.cardInteractionManager.destroy();
       this.cardInteractionManager = null;
     }
+    if (this.frequentlyUsedPanel) {
+      this.frequentlyUsedPanel.destroy();
+      this.frequentlyUsedPanel = null;
+    }
   }
   onDataUpdate(action, data) {
     super.onDataUpdate(action, data);
@@ -311,12 +375,12 @@ class DashboardTab extends BaseTab {
       if (app) {
         await this.collectRecentActivity(app);
         if (this.container) {
-          this.renderRecentActivityPanel(this.container);
+          this.renderDashboardContent(this.container);
         }
         this.updatePageInfo?.();
       }
     } catch (error) {
-      console.error('❌ 刷新Dashboard最近活动失败:', error);
+      console.error('❌ 刷新Dashboard数据失败:', error);
     }
   }
   setupAutoRefresh() {

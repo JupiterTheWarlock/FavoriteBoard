@@ -1,0 +1,377 @@
+/* 常用网页面板样式 */
+
+/* ==================== 面板容器 ==================== */
+
+.frequently-used-panel {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.frequently-used-panel:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* ==================== 面板头部 ==================== */
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.panel-header .count {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  background: var(--bg-color);
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* ==================== 常用网页网格 ==================== */
+
+.frequently-used-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* ==================== 常用网页按钮 ==================== */
+
+.frequently-used-button {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  border: 2px solid var(--border-color);
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.frequently-used-button:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+}
+
+.frequently-used-button:active {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.frequently-used-button .website-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 4px;
+  transition: transform 0.2s ease;
+}
+
+.frequently-used-button:hover .website-icon {
+  transform: scale(1.1);
+}
+
+/* ==================== 移除按钮 ==================== */
+
+.frequently-used-button .remove-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: var(--white);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
+}
+
+.frequently-used-button:hover .remove-btn {
+  display: flex;
+}
+
+.frequently-used-button .remove-btn:hover {
+  background: #c0392b;
+  transform: scale(1.1);
+  box-shadow: 0 3px 6px rgba(231, 76, 60, 0.4);
+}
+
+.frequently-used-button .remove-btn:active {
+  transform: scale(0.95);
+}
+
+/* ==================== 空状态 ==================== */
+
+.frequently-used-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+}
+
+.frequently-used-empty .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.frequently-used-empty .empty-message {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.frequently-used-empty .empty-hint {
+  font-size: 0.85rem;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+
+/* ==================== 加载状态 ==================== */
+
+.frequently-used-panel .loading-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+}
+
+.frequently-used-panel .loading-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  animation: spin 1s linear infinite;
+}
+
+.frequently-used-panel .loading-text {
+  font-size: 0.9rem;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== 错误状态 ==================== */
+
+.frequently-used-panel .error-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--accent-color);
+}
+
+.frequently-used-panel .error-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.frequently-used-panel .error-text {
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  color: var(--accent-color);
+}
+
+.frequently-used-panel .error-detail {
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+  color: var(--text-light);
+  word-break: break-word;
+}
+
+.frequently-used-panel .retry-btn {
+  background: var(--primary-color);
+  color: var(--white);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.frequently-used-panel .retry-btn:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+/* ==================== 响应式设计 ==================== */
+
+@media (max-width: 768px) {
+  .frequently-used-panel {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .frequently-used-grid {
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+    gap: 0.75rem;
+  }
+  
+  .frequently-used-button {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+  }
+  
+  .frequently-used-button .website-icon {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .frequently-used-button .remove-btn {
+    width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+  
+  .panel-header h3 {
+    font-size: 1rem;
+  }
+  
+  .panel-header .count {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .frequently-used-panel {
+    padding: 0.75rem;
+  }
+  
+  .frequently-used-grid {
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+    gap: 0.5rem;
+  }
+  
+  .frequently-used-button {
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
+  }
+  
+  .frequently-used-button .website-icon {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .frequently-used-button .remove-btn {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+  
+  .frequently-used-empty .empty-icon {
+    font-size: 2.5rem;
+  }
+  
+  .frequently-used-empty .empty-message {
+    font-size: 0.9rem;
+  }
+  
+  .frequently-used-empty .empty-hint {
+    font-size: 0.8rem;
+  }
+}
+
+/* ==================== 动画效果 ==================== */
+
+.frequently-used-button {
+  animation: fadeInUp 0.3s ease;
+}
+
+.frequently-used-button:nth-child(1) { animation-delay: 0.05s; }
+.frequently-used-button:nth-child(2) { animation-delay: 0.1s; }
+.frequently-used-button:nth-child(3) { animation-delay: 0.15s; }
+.frequently-used-button:nth-child(4) { animation-delay: 0.2s; }
+.frequently-used-button:nth-child(5) { animation-delay: 0.25s; }
+.frequently-used-button:nth-child(6) { animation-delay: 0.3s; }
+.frequently-used-button:nth-child(7) { animation-delay: 0.35s; }
+.frequently-used-button:nth-child(8) { animation-delay: 0.4s; }
+.frequently-used-button:nth-child(9) { animation-delay: 0.45s; }
+.frequently-used-button:nth-child(10) { animation-delay: 0.5s; }
+.frequently-used-button:nth-child(11) { animation-delay: 0.55s; }
+.frequently-used-button:nth-child(12) { animation-delay: 0.6s; }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ==================== 无障碍支持 ==================== */
+
+.frequently-used-button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.frequently-used-button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.frequently-used-button .remove-btn:focus {
+  outline: 2px solid var(--white);
+  outline-offset: 1px;
+}
+
+/* ==================== 减少动画偏好 ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .frequently-used-button {
+    animation: none;
+  }
+  
+  .frequently-used-button:hover {
+    transform: none;
+  }
+  
+  .frequently-used-button .website-icon {
+    transition: none;
+  }
+  
+  .frequently-used-button:hover .website-icon {
+    transform: none;
+  }
+  
+  .frequently-used-panel .loading-icon {
+    animation: none;
+  }
+}
+
