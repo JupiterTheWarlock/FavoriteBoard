@@ -15,7 +15,6 @@ class DashboardTab extends BaseTab {
     this.statsData = null;
     this.recentActivity = [];
     this.refreshInterval = null;
-    this.cardInteractionManager = null;
   }
   
   /**
@@ -232,12 +231,19 @@ class DashboardTab extends BaseTab {
    * @param {HTMLElement} dashboard - Dashboard容器元素
    */
   bindActivityCardEvents(dashboard) {
-    if (!this.cardInteractionManager) {
-      this.cardInteractionManager = createCardInteractionManager({
-        showNotification: this.showNotification?.bind(this),
-        app: window.linkBoardApp
-      });
+    // 获取应用实例和UI管理器
+    const app = window.linkBoardApp;
+    if (!app || !app.uiManager) {
+      console.warn('⚠️ 应用实例或UI管理器不可用');
+      return;
     }
+    
+    const contextMenuManager = app.uiManager.getContextMenuManager();
+    if (!contextMenuManager || !contextMenuManager.cardContextMenu) {
+      console.warn('⚠️ ContextMenuManager或CardContextMenu不可用');
+      return;
+    }
+    
     const activityCards = dashboard.querySelectorAll('.activity-card[data-url]:not([data-url=""])');
     activityCards.forEach(card => {
       const linkId = card.dataset.linkId;
@@ -248,15 +254,50 @@ class DashboardTab extends BaseTab {
           url: url,
           title: card.querySelector('.activity-title')?.textContent || '未知链接'
         };
-        this.cardInteractionManager.bindCardEvents(card, linkData, {
-          enableClick: true,
-          enableContextMenu: true,
-          enableMove: true,
-          enableDelete: true,
-          enableCopy: true,
-          enableNewWindow: true,
-          enableFrequentlyUsed: true
+        
+        // 左键点击事件
+        card.addEventListener('click', (e) => {
+          // 如果点击的是上下文菜单按钮，不打开链接
+          if (e.target.closest('.context-menu-btn')) {
+            return;
+          }
+          
+          // 默认在新标签页打开链接
+          if (linkData.url) {
+            chrome.tabs.create({ url: linkData.url });
+          }
         });
+        
+        // 右键菜单事件
+        card.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          
+          // 使用统一的ContextMenuManager接口显示菜单
+          contextMenuManager.showCardMenu(e, linkData, card, {
+            enableMove: true,
+            enableDelete: true,
+            enableCopy: true,
+            enableNewWindow: true,
+            enableFrequentlyUsed: true
+          });
+        });
+        
+        // 上下文菜单按钮
+        const contextBtn = card.querySelector('.context-menu-btn');
+        if (contextBtn) {
+          contextBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            // 使用统一的ContextMenuManager接口显示菜单
+            contextMenuManager.showCardMenu(e, linkData, card, {
+              enableMove: true,
+              enableDelete: true,
+              enableCopy: true,
+              enableNewWindow: true,
+              enableFrequentlyUsed: true
+            });
+          });
+        }
         const iconImg = card.querySelector('.activity-icon-img');
         if (iconImg) {
           let fallbackAttempts = 0;
@@ -347,10 +388,16 @@ class DashboardTab extends BaseTab {
     super.destroy();
     this.clearAutoRefresh();
     this.recentActivity = [];
-    if (this.cardInteractionManager) {
-      this.cardInteractionManager.destroy();
-      this.cardInteractionManager = null;
+    
+    // 清理右键菜单 - 使用新的ContextMenuManager
+    const app = window.linkBoardApp;
+    if (app && app.uiManager) {
+      const contextMenuManager = app.uiManager.getContextMenuManager();
+      if (contextMenuManager) {
+        contextMenuManager.hideAllMenus();
+      }
     }
+    
     if (this.frequentlyUsedPanel) {
       this.frequentlyUsedPanel.destroy();
       this.frequentlyUsedPanel = null;

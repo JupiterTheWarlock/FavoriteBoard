@@ -294,23 +294,66 @@ class BookmarkTab extends BaseTab {
    * @param {Object} link - 链接对象
    */
   bindCardEvents(card, link) {
-    // 初始化卡片交互管理器（如果还没有的话）
-    if (!this.cardInteractionManager) {
-      this.cardInteractionManager = createCardInteractionManager({
-        showNotification: this.showNotification.bind(this),
-        app: window.linkBoardApp,
+    // 获取应用实例和UI管理器
+    const app = window.linkBoardApp;
+    if (!app || !app.uiManager) {
+      console.warn('⚠️ 应用实例或UI管理器不可用');
+      return;
+    }
+    
+    const contextMenuManager = app.uiManager.getContextMenuManager();
+    if (!contextMenuManager || !contextMenuManager.cardContextMenu) {
+      console.warn('⚠️ ContextMenuManager或CardContextMenu不可用');
+      return;
+    }
+    
+    // 左键点击事件
+    card.addEventListener('click', (e) => {
+      // 如果点击的是上下文菜单按钮，不打开链接
+      if (e.target.closest('.context-menu-btn')) {
+        return;
+      }
+      
+      // 默认在新标签页打开链接
+      if (link.url) {
+        chrome.tabs.create({ url: link.url });
+      }
+    });
+    
+    // 右键菜单事件
+    card.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      
+      // 使用统一的ContextMenuManager接口显示菜单
+      contextMenuManager.showCardMenu(e, link, card, {
+        enableMove: true,
+        enableDelete: true,
+        enableCopy: true,
+        enableNewWindow: true,
+        enableFrequentlyUsed: true,
         onMoveRequested: this.showMoveToFolderDialog.bind(this),
         onDeleteRequested: this.showDeleteConfirmation.bind(this)
       });
-    }
-    
-    // 使用卡片交互管理器绑定事件
-    this.cardInteractionManager.bindCardEvents(card, link, {
-      enableClick: true,
-      enableContextMenu: true,
-      onMoveRequested: this.showMoveToFolderDialog.bind(this),
-      onDeleteRequested: this.showDeleteConfirmation.bind(this)
     });
+    
+    // 上下文菜单按钮
+    const contextBtn = card.querySelector('.context-menu-btn');
+    if (contextBtn) {
+      contextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        
+        // 使用统一的ContextMenuManager接口显示菜单
+        contextMenuManager.showCardMenu(e, link, card, {
+          enableMove: true,
+          enableDelete: true,
+          enableCopy: true,
+          enableNewWindow: true,
+          enableFrequentlyUsed: true,
+          onMoveRequested: this.showMoveToFolderDialog.bind(this),
+          onDeleteRequested: this.showDeleteConfirmation.bind(this)
+        });
+      });
+    }
   }
   
   /**
@@ -739,9 +782,13 @@ class BookmarkTab extends BaseTab {
   onDeactivate() {
     super.onDeactivate();
     
-    // 隐藏右键菜单
-    if (this.cardInteractionManager) {
-      this.cardInteractionManager.hideContextMenu();
+    // 隐藏右键菜单 - 使用新的ContextMenuManager
+    const app = window.linkBoardApp;
+    if (app && app.uiManager) {
+      const contextMenuManager = app.uiManager.getContextMenuManager();
+      if (contextMenuManager) {
+        contextMenuManager.hideAllMenus();
+      }
     }
   }
   
@@ -799,10 +846,13 @@ class BookmarkTab extends BaseTab {
   destroy() {
     super.destroy();
     
-    // 清理卡片交互管理器
-    if (this.cardInteractionManager) {
-      this.cardInteractionManager.destroy();
-      this.cardInteractionManager = null;
+    // 清理右键菜单 - 使用新的ContextMenuManager
+    const app = window.linkBoardApp;
+    if (app && app.uiManager) {
+      const contextMenuManager = app.uiManager.getContextMenuManager();
+      if (contextMenuManager) {
+        contextMenuManager.hideAllMenus();
+      }
     }
   }
 }

@@ -1,6 +1,7 @@
 /**
  * ContextMenuManager - 右键菜单管理器
- * 统一管理文件夹和Tab右键菜单
+ * 统一管理所有类型的右键菜单，提供统一的菜单显示接口
+ * 实现菜单类型路由和统一的菜单管理架构
  */
 class ContextMenuManager {
   constructor(eventBus, dialogManager) {
@@ -18,10 +19,39 @@ class ContextMenuManager {
     
     console.log('🎯 ContextMenuManager初始化开始...');
     
+    // 初始化子菜单管理器
+    this.initSubMenuManagers();
+    
     // 绑定全局事件
     this.bindGlobalEvents();
     
     console.log('✅ ContextMenuManager初始化完成');
+  }
+  
+  /**
+   * 初始化子菜单管理器
+   */
+  initSubMenuManagers() {
+    try {
+      // 初始化卡片右键菜单管理器
+      if (window.CardContextMenu) {
+        this.cardContextMenu = new CardContextMenu(this);
+        console.log('✅ CardContextMenu初始化完成');
+      } else {
+        console.warn('⚠️ CardContextMenu类不可用');
+      }
+      
+      // 初始化常用网页右键菜单管理器
+      if (window.FrequentlyUsedContextMenu) {
+        this.frequentlyUsedContextMenu = new FrequentlyUsedContextMenu(this);
+        console.log('✅ FrequentlyUsedContextMenu初始化完成');
+      } else {
+        console.warn('⚠️ FrequentlyUsedContextMenu类不可用');
+      }
+      
+    } catch (error) {
+      console.error('❌ 初始化子菜单管理器失败:', error);
+    }
   }
   
   /**
@@ -45,18 +75,80 @@ class ContextMenuManager {
     console.log('🔗 ContextMenuManager全局事件绑定完成');
   }
   
+  // ==================== 统一菜单显示接口 ====================
+  
+  /**
+   * 统一的菜单显示接口
+   * @param {Event} event - 鼠标事件
+   * @param {Array} menuItems - 菜单项数组
+   * @param {string} menuType - 菜单类型
+   * @param {Object} contextData - 上下文数据
+   * @returns {Object} 菜单对象
+   */
+  showMenu(event, menuItems, menuType, contextData = null) {
+    try {
+      console.log(`🎯 显示菜单: ${menuType}`);
+      
+      // 隐藏现有菜单
+      this.hideAllMenus();
+      
+      // 创建菜单
+      const menu = this.createMenu(event, menuItems, menuType, contextData);
+      
+      // 显示菜单
+      this.showMenuElement(menu, event);
+      
+      return menu;
+      
+    } catch (error) {
+      console.error('❌ 显示菜单失败:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 显示卡片右键菜单
+   * @param {Event} event - 鼠标事件
+   * @param {Object} link - 链接对象
+   * @param {HTMLElement} card - 卡片元素
+   * @param {Object} config - 配置选项
+   * @returns {Object} 菜单对象
+   */
+  showCardMenu(event, link, card, config = {}) {
+    if (!this.cardContextMenu) {
+      console.warn('⚠️ CardContextMenu不可用');
+      return null;
+    }
+    
+    return this.cardContextMenu.showCardContextMenu(event, link, card, config);
+  }
+  
+  /**
+   * 显示常用网页右键菜单
+   * @param {Event} event - 鼠标事件
+   * @param {string} url - 网页URL
+   * @param {string} title - 网页标题
+   * @returns {Object} 菜单对象
+   */
+  showFrequentlyUsedMenu(event, url, title) {
+    if (!this.frequentlyUsedContextMenu) {
+      console.warn('⚠️ FrequentlyUsedContextMenu不可用');
+      return null;
+    }
+    
+    return this.frequentlyUsedContextMenu.showFrequentlyUsedContextMenu(event, url, title);
+  }
+  
   /**
    * 显示文件夹右键菜单
    * @param {Event} event - 鼠标右键事件
    * @param {string} folderId - 文件夹ID
    * @param {Object} folderData - 文件夹数据
+   * @returns {Object} 菜单对象
    */
   showFolderMenu(event, folderId, folderData) {
     try {
       console.log(`🎯 显示文件夹右键菜单: ${folderData.title}`);
-      
-      // 隐藏现有菜单
-      this.hideAllMenus();
       
       // 保存当前文件夹数据
       this.currentFolderData = folderData;
@@ -94,12 +186,12 @@ class ContextMenuManager {
         );
       }
       
-      // 创建并显示菜单
-      const menu = this.createMenu(event, menuItems, 'folder');
-      this.showMenu(menu, event);
+      // 使用统一接口显示菜单
+      return this.showMenu(event, menuItems, 'folder', { folderId, folderData });
       
     } catch (error) {
       console.error('❌ 显示文件夹右键菜单失败:', error);
+      return null;
     }
   }
   
@@ -107,13 +199,11 @@ class ContextMenuManager {
    * 显示Tab右键菜单
    * @param {Event} event - 鼠标右键事件
    * @param {Object} tab - Tab对象
+   * @returns {Object} 菜单对象
    */
   showTabMenu(event, tab) {
     try {
       console.log(`🎯 显示Tab右键菜单: ${tab.id}`);
-      
-      // 隐藏现有菜单
-      this.hideAllMenus();
       
       // 保存当前Tab数据
       this.currentTabData = tab;
@@ -147,12 +237,12 @@ class ContextMenuManager {
         );
       }
       
-      // 创建并显示菜单
-      const menu = this.createMenu(event, menuItems, 'tab');
-      this.showMenu(menu, event);
+      // 使用统一接口显示菜单
+      return this.showMenu(event, menuItems, 'tab', { tab });
       
     } catch (error) {
       console.error('❌ 显示Tab右键菜单失败:', error);
+      return null;
     }
   }
   
@@ -160,13 +250,11 @@ class ContextMenuManager {
    * 显示书签右键菜单
    * @param {Event} event - 鼠标右键事件
    * @param {Object} bookmarkData - 书签数据
+   * @returns {Object} 菜单对象
    */
   showBookmarkMenu(event, bookmarkData) {
     try {
       console.log(`🎯 显示书签右键菜单: ${bookmarkData.title}`);
-      
-      // 隐藏现有菜单
-      this.hideAllMenus();
       
       // 创建菜单项
       const menuItems = [
@@ -205,66 +293,22 @@ class ContextMenuManager {
         }
       ];
       
-      // 创建并显示菜单
-      const menu = this.createMenu(event, menuItems, 'bookmark', bookmarkData);
-      this.showMenu(menu, event);
+      // 使用统一接口显示菜单
+      return this.showMenu(event, menuItems, 'bookmark', bookmarkData);
       
     } catch (error) {
       console.error('❌ 显示书签右键菜单失败:', error);
+      return null;
     }
   }
   
-  /**
-   * 显示常用网页右键菜单
-   * @param {Event} event - 鼠标右键事件
-   * @param {string} url - 网页URL
-   * @param {string} title - 网页标题
-   */
-  showFrequentlyUsedContextMenu(event, url, title) {
-    try {
-      console.log(`🎯 显示常用网页右键菜单: ${title}`);
-      
-      // 隐藏现有菜单
-      this.hideAllMenus();
-      
-      // 创建菜单项
-      const menuItems = [
-        {
-          icon: '🆕',
-          text: '新窗口打开',
-          action: 'openNewWindow',
-          enabled: true
-        },
-        {
-          icon: '📋',
-          text: '复制链接',
-          action: 'copyLink',
-          enabled: true
-        },
-        { type: 'separator' },
-        {
-          icon: '🗑️',
-          text: '移除常用网页',
-          action: 'removeFrequentlyUsed',
-          enabled: true,
-          danger: true
-        }
-      ];
-      
-      // 创建并显示菜单
-      const menu = this.createMenu(event, menuItems, 'frequently-used', { url, title });
-      this.showMenu(menu, event);
-      
-    } catch (error) {
-      console.error('❌ 显示常用网页右键菜单失败:', error);
-    }
-  }
+  // ==================== 菜单创建和显示 ====================
   
   /**
    * 创建菜单
    * @param {Event} event - 鼠标事件
    * @param {Array} menuItems - 菜单项配置
-   * @param {string} menuType - 菜单类型 ('folder', 'tab', 'frequently-used')
+   * @param {string} menuType - 菜单类型
    * @param {Object} contextData - 额外的上下文数据
    * @returns {Object} 菜单对象
    */
@@ -284,9 +328,10 @@ class ContextMenuManager {
       } else {
         const enabledClass = item.enabled ? '' : 'disabled';
         const dangerClass = item.danger ? 'danger' : '';
+        const customClass = item.className ? ` ${item.className}` : '';
         
         menuHTML += `
-          <div class="context-menu-item ${enabledClass} ${dangerClass}" data-action="${item.action}">
+          <div class="context-menu-item ${enabledClass} ${dangerClass}${customClass}" data-action="${item.action}">
             <span class="icon">${item.icon}</span>
             <span class="menu-text">${item.text}</span>
           </div>
@@ -333,11 +378,11 @@ class ContextMenuManager {
   }
   
   /**
-   * 显示菜单
+   * 显示菜单元素
    * @param {Object} menu - 菜单对象
    * @param {Event} event - 鼠标事件
    */
-  showMenu(menu, event) {
+  showMenuElement(menu, event) {
     try {
       // 计算菜单位置
       const position = this.calculateMenuPosition(event, menu.element);
@@ -436,6 +481,8 @@ class ContextMenuManager {
     });
   }
   
+  // ==================== 菜单动作处理 ====================
+  
   /**
    * 处理菜单动作
    * @param {string} menuType - 菜单类型
@@ -446,19 +493,63 @@ class ContextMenuManager {
     try {
       console.log(`🎯 处理菜单动作: ${menuType} - ${action}`);
       
-      if (menuType === 'folder') {
-        this.handleFolderMenuAction(action);
-      } else if (menuType === 'tab') {
-        this.handleTabMenuAction(action);
-      } else if (menuType === 'frequently-used') {
-        this.handleFrequentlyUsedMenuAction(action, menu);
-      } else if (menuType === 'bookmark') {
-        this.handleBookmarkMenuAction(action, menu);
+      // 根据菜单类型路由到对应的处理器
+      switch (menuType) {
+        case 'card':
+          this.handleCardMenuAction(action, menu);
+          break;
+          
+        case 'frequently-used':
+          this.handleFrequentlyUsedMenuAction(action, menu);
+          break;
+          
+        case 'folder':
+          this.handleFolderMenuAction(action);
+          break;
+          
+        case 'tab':
+          this.handleTabMenuAction(action);
+          break;
+          
+        case 'bookmark':
+          this.handleBookmarkMenuAction(action, menu);
+          break;
+          
+        default:
+          console.warn(`⚠️ 未知的菜单类型: ${menuType}`);
       }
       
     } catch (error) {
       console.error('❌ 处理菜单动作失败:', error);
     }
+  }
+  
+  /**
+   * 处理卡片菜单动作
+   * @param {string} action - 动作类型
+   * @param {Object} menu - 菜单对象
+   */
+  handleCardMenuAction(action, menu) {
+    if (!this.cardContextMenu) {
+      console.warn('⚠️ CardContextMenu不可用');
+      return;
+    }
+    
+    this.cardContextMenu.handleMenuAction(action, menu.contextData);
+  }
+  
+  /**
+   * 处理常用网页菜单动作
+   * @param {string} action - 动作类型
+   * @param {Object} menu - 菜单对象
+   */
+  handleFrequentlyUsedMenuAction(action, menu) {
+    if (!this.frequentlyUsedContextMenu) {
+      console.warn('⚠️ FrequentlyUsedContextMenu不可用');
+      return;
+    }
+    
+    this.frequentlyUsedContextMenu.handleMenuAction(action, menu.contextData);
   }
   
   /**
@@ -505,48 +596,6 @@ class ContextMenuManager {
       action,
       tab
     });
-  }
-  
-  /**
-   * 处理常用网页菜单动作
-   * @param {string} action - 动作类型
-   * @param {Object} menu - 菜单对象
-   */
-  handleFrequentlyUsedMenuAction(action, menu) {
-    if (!menu || !menu.contextData) {
-      console.warn('⚠️ 常用网页上下文数据不可用');
-      return;
-    }
-    
-    const { url, title } = menu.contextData;
-    
-    switch (action) {
-      case 'openNewWindow':
-        window.open(url, '_blank');
-        break;
-      case 'copyLink':
-        navigator.clipboard.writeText(url).then(() => {
-          this.eventBus.emit('notification-requested', {
-            message: '链接已复制到剪贴板',
-            type: 'success'
-          });
-        }).catch(() => {
-          this.eventBus.emit('notification-requested', {
-            message: '复制失败，请手动复制',
-            type: 'error'
-          });
-        });
-        break;
-      case 'removeFrequentlyUsed':
-        // 发布移除常用网页事件
-        this.eventBus.emit('frequently-used-remove-requested', {
-          url,
-          title
-        });
-        break;
-      default:
-        console.warn(`⚠️ 未知的常用网页菜单动作: ${action}`);
-    }
   }
   
   /**
@@ -602,6 +651,8 @@ class ContextMenuManager {
         console.warn(`⚠️ 未知的书签菜单动作: ${action}`);
     }
   }
+  
+  // ==================== 对话框和确认操作 ====================
   
   /**
    * 显示创建子文件夹对话框
@@ -769,6 +820,8 @@ class ContextMenuManager {
     dialog.show();
   }
   
+  // ==================== 工具方法 ====================
+  
   /**
    * 检查是否为根文件夹
    * @param {Object} folderData - 文件夹数据
@@ -779,6 +832,16 @@ class ContextMenuManager {
     // ID "1" 为收藏栏
     // ID "2" 为其他收藏夹
     return folderData.id === '1' || folderData.id === '2' || folderData.parentId === '0';
+  }
+  
+  /**
+   * 隐藏指定菜单
+   * @param {Object} menu - 菜单对象
+   */
+  hideMenu(menu) {
+    if (menu && menu.hide) {
+      menu.hide();
+    }
   }
   
   /**
@@ -808,6 +871,8 @@ class ContextMenuManager {
   getActiveMenuCount() {
     return this.activeMenus.size;
   }
+  
+  // ==================== 生命周期方法 ====================
   
   /**
    * 主题变更处理
@@ -842,6 +907,17 @@ class ContextMenuManager {
     
     // 隐藏所有菜单
     this.hideAllMenus();
+    
+    // 销毁子菜单管理器
+    if (this.cardContextMenu) {
+      this.cardContextMenu.destroy();
+      this.cardContextMenu = null;
+    }
+    
+    if (this.frequentlyUsedContextMenu) {
+      this.frequentlyUsedContextMenu.destroy();
+      this.frequentlyUsedContextMenu = null;
+    }
     
     // 清理引用
     this.activeMenus.clear();

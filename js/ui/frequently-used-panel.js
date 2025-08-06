@@ -452,7 +452,7 @@ class FrequentlyUsedPanel {
     }
     
     // 显示常用网页的上下文菜单
-    contextMenuManager.showFrequentlyUsedContextMenu(event, url, title);
+    contextMenuManager.showFrequentlyUsedMenu(event, url, title);
   }
   
   /**

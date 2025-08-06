@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>右键菜单重构测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        
+        .test-card {
+            display: inline-block;
+            width: 200px;
+            padding: 15px;
+            margin: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .test-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.2);
+        }
+        
+        .test-card .title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .test-card .url {
+            color: #666;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .test-button:hover {
+            background: #0056b3;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>右键菜单重构测试</h1>
+        
+        <div class="test-section">
+            <h2>测试状态</h2>
+            <div id="testStatus" class="status info">
+                正在初始化测试...
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>卡片右键菜单测试</h2>
+            <p>右键点击下面的卡片来测试新的卡片右键菜单：</p>
+            
+            <div class="test-card" data-url="https://www.google.com" data-title="Google">
+                <div class="title">Google</div>
+                <div class="url">https://www.google.com</div>
+            </div>
+            
+            <div class="test-card" data-url="https://www.github.com" data-title="GitHub">
+                <div class="title">GitHub</div>
+                <div class="url">https://www.github.com</div>
+            </div>
+            
+            <div class="test-card" data-url="https://www.stackoverflow.com" data-title="Stack Overflow">
+                <div class="title">Stack Overflow</div>
+                <div class="url">https://www.stackoverflow.com</div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>常用网页右键菜单测试</h2>
+            <p>右键点击下面的按钮来测试常用网页右键菜单：</p>
+            
+            <button class="test-button" data-url="https://www.baidu.com" data-title="百度">
+                百度
+            </button>
+            
+            <button class="test-button" data-url="https://www.zhihu.com" data-title="知乎">
+                知乎
+            </button>
+            
+            <button class="test-button" data-url="https://www.bilibili.com" data-title="哔哩哔哩">
+                哔哩哔哩
+            </button>
+        </div>
+        
+        <div class="test-section">
+            <h2>功能测试</h2>
+            <button id="testCardContextMenu" class="test-button">测试卡片右键菜单</button>
+            <button id="testFrequentlyUsedContextMenu" class="test-button">测试常用网页右键菜单</button>
+            <button id="testComponents" class="test-button">测试组件加载</button>
+        </div>
+    </div>
+
+    <!-- 加载核心脚本 -->
+    <script src="js/core/event-bus.js"></script>
+    <script src="js/core/state-manager.js"></script>
+    <script src="js/core/init.js"></script>
+    
+    <!-- 加载工具函数 -->
+    <script src="js/utils/data-utils.js"></script>
+    <script src="js/utils/dom-utils.js"></script>
+    <script src="js/utils/ui-utils.js"></script>
+    <script src="js/utils/tab-utils.js"></script>
+    <script src="js/utils/card-interaction-utils.js"></script>
+    
+    <!-- 加载配置 -->
+    <script src="js/config/app-config.js"></script>
+    
+    <!-- 加载数据层 -->
+    <script src="js/data/bookmark-manager.js"></script>
+    <script src="js/data/data-processor.js"></script>
+    <script src="js/data/frequently-used-manager.js"></script>
+    
+    <!-- 加载UI管理器 -->
+    <script src="js/ui/notification-manager.js"></script>
+    <script src="js/ui/dialog-manager.js"></script>
+    <script src="js/ui/context-menu-manager.js"></script>
+    <script src="js/ui/sidebar-manager.js"></script>
+    <script src="js/ui/ui-manager.js"></script>
+    
+    <!-- 加载新的右键菜单UI组件 -->
+    <script src="js/ui/card-context-menu.js"></script>
+    <script src="js/ui/frequently-used-context-menu.js"></script>
+    
+    <!-- 测试脚本 -->
+    <script>
+        // 模拟应用实例
+        window.linkBoardApp = {
+            eventBus: new EventBus(),
+            stateManager: new StateManager(),
+            uiManager: {
+                getContextMenuManager: () => window.contextMenuManager,
+                getDialogManager: () => window.dialogManager,
+                showNotification: (message, type) => {
+                    console.log(`[${type}] ${message}`);
+                    updateStatus(`通知: ${message}`, type);
+                }
+            },
+            bookmarkManager: {
+                moveBookmark: async (id, targetFolderId) => {
+                    console.log(`移动书签: ${id} -> ${targetFolderId}`);
+                    return true;
+                },
+                deleteBookmark: async (id) => {
+                    console.log(`删除书签: ${id}`);
+                    return true;
+                }
+            },
+            frequentlyUsedManager: {
+                addFrequentlyUsedWebsite: async (url, title) => {
+                    console.log(`添加常用网页: ${title} (${url})`);
+                    return true;
+                },
+                removeFrequentlyUsedWebsite: async (url) => {
+                    console.log(`移除常用网页: ${url}`);
+                    return true;
+                }
+            }
+        };
+        
+        // 初始化管理器
+        window.dialogManager = new DialogManager(window.linkBoardApp.eventBus);
+        window.contextMenuManager = new ContextMenuManager(window.linkBoardApp.eventBus, window.dialogManager);
+        
+        function updateStatus(message, type = 'info') {
+            const statusElement = document.getElementById('testStatus');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+        
+        function testComponents() {
+            updateStatus('正在测试组件加载...', 'info');
+            
+            const tests = [
+                {
+                    name: 'CardContextMenu',
+                    test: () => window.CardContextMenu && new CardContextMenu(window.contextMenuManager),
+                    success: 'CardContextMenu 加载成功'
+                },
+                {
+                    name: 'FrequentlyUsedContextMenu',
+                    test: () => window.FrequentlyUsedContextMenu && new FrequentlyUsedContextMenu(window.contextMenuManager),
+                    success: 'FrequentlyUsedContextMenu 加载成功'
+                },
+                {
+                    name: 'ContextMenuManager',
+                    test: () => window.contextMenuManager && window.contextMenuManager.cardContextMenu,
+                    success: 'ContextMenuManager 初始化成功'
+                }
+            ];
+            
+            let allPassed = true;
+            
+            tests.forEach(test => {
+                try {
+                    test.test();
+                    console.log(`✅ ${test.success}`);
+                } catch (error) {
+                    console.error(`❌ ${test.name} 测试失败:`, error);
+                    allPassed = false;
+                }
+            });
+            
+            if (allPassed) {
+                updateStatus('所有组件加载成功！', 'success');
+            } else {
+                updateStatus('部分组件加载失败，请检查控制台', 'error');
+            }
+        }
+        
+        function testCardContextMenu() {
+            updateStatus('测试卡片右键菜单...', 'info');
+            
+            const card = document.querySelector('.test-card');
+            if (!card) {
+                updateStatus('找不到测试卡片', 'error');
+                return;
+            }
+            
+            const link = {
+                id: 'test-1',
+                title: card.dataset.title,
+                url: card.dataset.url
+            };
+            
+            try {
+                window.contextMenuManager.showCardMenu(
+                    new MouseEvent('contextmenu', { clientX: 100, clientY: 100 }),
+                    link,
+                    card,
+                    {
+                        enableMove: true,
+                        enableDelete: true,
+                        enableCopy: true,
+                        enableNewWindow: true,
+                        enableFrequentlyUsed: true
+                    }
+                );
+                updateStatus('卡片右键菜单测试成功', 'success');
+            } catch (error) {
+                console.error('卡片右键菜单测试失败:', error);
+                updateStatus('卡片右键菜单测试失败', 'error');
+            }
+        }
+        
+        function testFrequentlyUsedContextMenu() {
+            updateStatus('测试常用网页右键菜单...', 'info');
+            
+            const button = document.querySelector('.test-button');
+            if (!button) {
+                updateStatus('找不到测试按钮', 'error');
+                return;
+            }
+            
+            try {
+                window.contextMenuManager.showFrequentlyUsedMenu(
+                    new MouseEvent('contextmenu', { clientX: 100, clientY: 100 }),
+                    button.dataset.url,
+                    button.dataset.title
+                );
+                updateStatus('常用网页右键菜单测试成功', 'success');
+            } catch (error) {
+                console.error('常用网页右键菜单测试失败:', error);
+                updateStatus('常用网页右键菜单测试失败', 'error');
+            }
+        }
+        
+        // 绑定测试按钮事件
+        document.getElementById('testComponents').addEventListener('click', testComponents);
+        document.getElementById('testCardContextMenu').addEventListener('click', testCardContextMenu);
+        document.getElementById('testFrequentlyUsedContextMenu').addEventListener('click', testFrequentlyUsedContextMenu);
+        
+        // 绑定卡片右键菜单事件
+        document.querySelectorAll('.test-card').forEach(card => {
+            card.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                
+                const link = {
+                    id: 'test-' + Math.random().toString(36).substr(2, 9),
+                    title: card.dataset.title,
+                    url: card.dataset.url
+                };
+                
+                try {
+                    window.contextMenuManager.showCardMenu(e, link, card);
+                } catch (error) {
+                    console.error('显示卡片右键菜单失败:', error);
+                    updateStatus('显示卡片右键菜单失败', 'error');
+                }
+            });
+        });
+        
+        // 绑定常用网页右键菜单事件
+        document.querySelectorAll('.test-button').forEach(button => {
+            button.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                
+                try {
+                    window.contextMenuManager.showFrequentlyUsedMenu(
+                        e,
+                        button.dataset.url,
+                        button.dataset.title
+                    );
+                } catch (error) {
+                    console.error('显示常用网页右键菜单失败:', error);
+                    updateStatus('显示常用网页右键菜单失败', 'error');
+                }
+            });
+        });
+        
+        // 页面加载完成后自动测试组件
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                testComponents();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
