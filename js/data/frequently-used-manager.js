@@ -8,59 +8,47 @@
  */
 class FrequentlyUsedManager {
   constructor(eventBus = null) {
-    // 事件总线
     this.eventBus = eventBus;
-    
-    // 存储配置
     this.storageKey = 'frequentlyUsedWebsites';
-    this.maxCount = null; // 移除最大数量限制
-    
-    // 缓存管理
+    this.maxCount = null;
     this.cache = null;
     this.lastSync = null;
     this.isLoading = false;
-    
-    // 事件监听器（如果没有eventBus，使用本地事件系统）
     this.eventListeners = new Map();
     
     console.log('⭐ FrequentlyUsedManager initialized');
   }
   
-  // ==================== 数据获取方法 ====================
+  // ==================== 核心数据操作方法 ====================
   
   /**
    * 获取常用网页列表
-   * @returns {Promise<Object>} 常用网页数据
    */
   async getFrequentlyUsedWebsites() {
     if (this.isLoading) {
-      console.log('⏳ Already loading frequently used websites, skipping...');
       return this.cache || { urls: [], maxCount: this.maxCount };
     }
     
     this.isLoading = true;
     
     try {
-      console.log('📖 Loading frequently used websites...');
-      
-      // 检查缓存是否有效
       if (this.cache && this.isCacheValid()) {
-        console.log('✅ Using cached frequently used websites data');
         this.isLoading = false;
         return this.cache;
       }
       
-      const data = await this.loadFromStorage();
+      // Edge浏览器数据迁移检查
+      const browser = this.detectBrowser();
+      if (browser === 'edge') {
+        await this.checkAndMigrateEdgeData();
+      }
       
-      // 验证和标准化数据
+      const data = await this.loadFromStorage();
       this.cache = this.validateAndNormalizeData(data);
       this.lastSync = Date.now();
       
-      console.log('✅ Frequently used websites loaded successfully');
-      console.log(`📊 Total: ${this.cache.urls.length} frequently used websites`);
-      
-      // 触发加载完成事件
       this.emit('frequently-used-loaded', this.cache);
+      await this.showStorageStatusNotification();
       
       this.isLoading = false;
       return this.cache;
@@ -68,53 +56,31 @@ class FrequentlyUsedManager {
     } catch (error) {
       console.error('❌ Error loading frequently used websites:', error);
       this.isLoading = false;
-      
-      // 触发错误事件
       this.emit('frequently-used-error', error);
-      
-      // 返回默认数据
       return { urls: [], maxCount: this.maxCount };
     }
   }
   
   /**
    * 添加常用网页
-   * @param {string} url - 网页URL
-   * @param {Object} bookmarkData - 收藏夹数据
-   * @returns {Promise<Object>} 添加结果
    */
   async addFrequentlyUsedWebsite(url, bookmarkData) {
     try {
-      console.log('➕ Adding frequently used website:', url);
-      
-      // 验证URL
       if (!this.isValidUrl(url)) {
         throw new Error('无效的URL');
       }
       
-      // 获取当前数据
       const data = await this.getFrequentlyUsedWebsites();
-      
-      // 检查是否已存在
       const existingIndex = data.urls.findIndex(item => item.url === url);
+      
       if (existingIndex !== -1) {
-        console.log('⚠️ Website already exists, updating...');
         data.urls[existingIndex] = this.createWebsiteInfo(url, bookmarkData);
       } else {
-        // 移除最大数量限制，直接添加新条目
         data.urls.push(this.createWebsiteInfo(url, bookmarkData));
       }
       
-      // 保存数据
       await this.saveToStorage(data);
-      
-      // 更新缓存
-      this.cache = data;
-      this.lastSync = Date.now();
-      
-      console.log('✅ Frequently used website added successfully');
-      
-      // 触发添加事件
+      this.updateCache(data);
       this.emit('frequently-used-added', { url, websiteInfo: this.getWebsiteInfo(url, bookmarkData) });
       
       return { success: true, data };
@@ -128,34 +94,19 @@ class FrequentlyUsedManager {
   
   /**
    * 移除常用网页
-   * @param {string} url - 网页URL
-   * @returns {Promise<Object>} 移除结果
    */
   async removeFrequentlyUsedWebsite(url) {
     try {
-      console.log('🗑️ Removing frequently used website:', url);
-      
-      // 获取当前数据
       const data = await this.getFrequentlyUsedWebsites();
-      
-      // 查找并移除
       const index = data.urls.findIndex(item => item.url === url);
+      
       if (index === -1) {
         throw new Error('常用网页不存在');
       }
       
       const removedItem = data.urls.splice(index, 1)[0];
-      
-      // 保存数据
       await this.saveToStorage(data);
-      
-      // 更新缓存
-      this.cache = data;
-      this.lastSync = Date.now();
-      
-      console.log('✅ Frequently used website removed successfully');
-      
-      // 触发移除事件
+      this.updateCache(data);
       this.emit('frequently-used-removed', { url, removedItem });
       
       return { success: true, removedItem };
@@ -169,37 +120,21 @@ class FrequentlyUsedManager {
   
   /**
    * 更新使用时间
-   * @param {string} url - 网页URL
-   * @returns {Promise<Object>} 更新结果
    */
   async updateLastUsed(url) {
     try {
-      console.log('🔄 Updating last used time for:', url);
-      
-      // 获取当前数据
       const data = await this.getFrequentlyUsedWebsites();
-      
-      // 查找并更新
       const item = data.urls.find(item => item.url === url);
+      
       if (!item) {
         throw new Error('常用网页不存在');
       }
       
       item.lastUsed = Date.now();
-      
-      // 重新排序（最近使用的在前）
       data.urls.sort((a, b) => b.lastUsed - a.lastUsed);
       
-      // 保存数据
       await this.saveToStorage(data);
-      
-      // 更新缓存
-      this.cache = data;
-      this.lastSync = Date.now();
-      
-      console.log('✅ Last used time updated successfully');
-      
-      // 触发更新事件
+      this.updateCache(data);
       this.emit('frequently-used-updated', { url, item });
       
       return { success: true, item };
@@ -213,44 +148,114 @@ class FrequentlyUsedManager {
   
   /**
    * 从收藏夹数据中获取网页信息
-   * @param {string} url - 网页URL
-   * @param {Array} allBookmarks - 所有收藏夹数据
-   * @returns {Object|null} 网页信息
    */
   getWebsiteInfo(url, allBookmarks) {
-    if (!url || !allBookmarks) {
-      return null;
-    }
+    if (!url || !allBookmarks) return null;
     
-    // 在收藏夹中查找匹配的书签
     const bookmark = this.findBookmarkByUrl(url, allBookmarks);
-    
-    if (bookmark) {
-      return {
-        url: bookmark.url,
-        title: bookmark.title,
-        icon: bookmark.icon || null,
-        addedAt: bookmark.dateAdded || Date.now(),
-        lastUsed: Date.now()
-      };
-    }
-    
-    return null;
+    return bookmark ? {
+      url: bookmark.url,
+      title: bookmark.title,
+      icon: bookmark.icon || null,
+      addedAt: bookmark.dateAdded || Date.now(),
+      lastUsed: Date.now()
+    } : null;
   }
   
   // ==================== 存储操作方法 ====================
   
   /**
-   * 从Chrome Storage加载数据
-   * @returns {Promise<Object>} 存储的数据
+   * 检测浏览器类型
    */
-  async loadFromStorage() {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.storage) {
-        reject(new Error('Chrome Storage API不可用'));
-        return;
+  detectBrowser() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    if (userAgent.includes('edg/') || userAgent.includes('edge/')) return 'edge';
+    if (userAgent.includes('chrome/')) return 'chrome';
+    return 'unknown';
+  }
+  
+  /**
+   * 检测是否支持同步存储
+   */
+  async isSyncStorageSupported() {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.sync) {
+        return false;
       }
       
+      const testKey = '__test_sync_storage__';
+      await new Promise((resolve, reject) => {
+        chrome.storage.sync.set({ [testKey]: 'test' }, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            chrome.storage.sync.remove([testKey], resolve);
+          }
+        });
+      });
+      
+      return true;
+    } catch (error) {
+      console.warn('⚠️ Sync storage not supported:', error.message);
+      return false;
+    }
+  }
+  
+  /**
+   * 从存储加载数据
+   */
+  async loadFromStorage() {
+    try {
+      const browser = this.detectBrowser();
+      const syncSupported = await this.isSyncStorageSupported();
+      
+      if (syncSupported) {
+        try {
+          return await this.loadFromSyncStorage();
+        } catch (error) {
+          console.warn('⚠️ Failed to load from sync storage, falling back to local storage:', error.message);
+        }
+      }
+      
+      return await this.loadFromLocalStorage();
+      
+    } catch (error) {
+      console.error('❌ Error loading from storage:', error);
+      return { urls: [], maxCount: this.maxCount };
+    }
+  }
+  
+  /**
+   * 保存数据到存储
+   */
+  async saveToStorage(data) {
+    try {
+      const browser = this.detectBrowser();
+      const syncSupported = await this.isSyncStorageSupported();
+      
+      if (syncSupported) {
+        try {
+          await this.saveToSyncStorage(data);
+          await this.saveToLocalStorage(data); // 备份
+          return;
+        } catch (error) {
+          console.warn('⚠️ Failed to save to sync storage, falling back to local storage:', error.message);
+        }
+      }
+      
+      await this.saveToLocalStorage(data);
+      
+    } catch (error) {
+      console.error('❌ Error saving to storage:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 从同步存储加载数据
+   */
+  async loadFromSyncStorage() {
+    return new Promise((resolve, reject) => {
       chrome.storage.sync.get([this.storageKey], (result) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
@@ -262,18 +267,41 @@ class FrequentlyUsedManager {
   }
   
   /**
-   * 保存数据到Chrome Storage
-   * @param {Object} data - 要保存的数据
-   * @returns {Promise<void>}
+   * 从本地存储加载数据
    */
-  async saveToStorage(data) {
+  async loadFromLocalStorage() {
     return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.storage) {
-        reject(new Error('Chrome Storage API不可用'));
-        return;
-      }
-      
+      chrome.storage.local.get([this.storageKey], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(result[this.storageKey] || { urls: [], maxCount: this.maxCount });
+        }
+      });
+    });
+  }
+  
+  /**
+   * 保存数据到同步存储
+   */
+  async saveToSyncStorage(data) {
+    return new Promise((resolve, reject) => {
       chrome.storage.sync.set({ [this.storageKey]: data }, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+  
+  /**
+   * 保存数据到本地存储
+   */
+  async saveToLocalStorage(data) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set({ [this.storageKey]: data }, () => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else {
@@ -287,8 +315,6 @@ class FrequentlyUsedManager {
   
   /**
    * 验证和标准化数据
-   * @param {Object} data - 原始数据
-   * @returns {Object} 标准化后的数据
    */
   validateAndNormalizeData(data) {
     if (!data || typeof data !== 'object') {
@@ -297,21 +323,14 @@ class FrequentlyUsedManager {
     
     const normalized = {
       urls: Array.isArray(data.urls) ? data.urls : [],
-      maxCount: null // 移除最大数量限制
+      maxCount: null
     };
     
-    // 验证每个URL项
     normalized.urls = normalized.urls.filter(item => {
-      if (!item || typeof item !== 'object') {
+      if (!item || typeof item !== 'object' || !item.url || !this.isValidUrl(item.url)) {
         return false;
       }
       
-      // 验证必需字段
-      if (!item.url || !this.isValidUrl(item.url)) {
-        return false;
-      }
-      
-      // 标准化字段
       return {
         url: item.url,
         title: item.title || 'Unknown',
@@ -321,36 +340,24 @@ class FrequentlyUsedManager {
       };
     });
     
-    // 按最后使用时间排序
     normalized.urls.sort((a, b) => b.lastUsed - a.lastUsed);
-    
     return normalized;
   }
   
   /**
    * 检查缓存是否有效
-   * @returns {boolean} 缓存是否有效
    */
   isCacheValid() {
-    if (!this.cache || !this.lastSync) {
-      return false;
-    }
-    
-    // 缓存有效期5分钟
+    if (!this.cache || !this.lastSync) return false;
     const cacheAge = Date.now() - this.lastSync;
-    return cacheAge < 5 * 60 * 1000;
+    return cacheAge < 5 * 60 * 1000; // 5分钟缓存
   }
   
   /**
    * 验证URL是否有效
-   * @param {string} url - URL字符串
-   * @returns {boolean} URL是否有效
    */
   isValidUrl(url) {
-    if (!url || typeof url !== 'string') {
-      return false;
-    }
-    
+    if (!url || typeof url !== 'string') return false;
     try {
       const urlObj = new URL(url);
       return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
@@ -361,13 +368,9 @@ class FrequentlyUsedManager {
   
   /**
    * 创建网页信息对象
-   * @param {string} url - 网页URL
-   * @param {Object} bookmarkData - 收藏夹数据
-   * @returns {Object} 网页信息
    */
   createWebsiteInfo(url, bookmarkData) {
     const bookmark = this.findBookmarkByUrl(url, bookmarkData);
-    
     return {
       url: url,
       title: bookmark ? bookmark.title : this.extractTitleFromUrl(url),
@@ -379,8 +382,6 @@ class FrequentlyUsedManager {
   
   /**
    * 从URL中提取标题
-   * @param {string} url - 网页URL
-   * @returns {string} 提取的标题
    */
   extractTitleFromUrl(url) {
     try {
@@ -393,26 +394,15 @@ class FrequentlyUsedManager {
   
   /**
    * 在收藏夹数据中查找书签
-   * @param {string} url - 网页URL
-   * @param {Array} bookmarks - 收藏夹数据
-   * @returns {Object|null} 找到的书签
    */
   findBookmarkByUrl(url, bookmarks) {
-    if (!Array.isArray(bookmarks)) {
-      return null;
-    }
+    if (!Array.isArray(bookmarks)) return null;
     
     for (const bookmark of bookmarks) {
-      if (bookmark.url === url) {
-        return bookmark;
-      }
-      
-      // 递归搜索子文件夹
+      if (bookmark.url === url) return bookmark;
       if (bookmark.children) {
         const found = this.findBookmarkByUrl(url, bookmark.children);
-        if (found) {
-          return found;
-        }
+        if (found) return found;
       }
     }
     
@@ -423,8 +413,6 @@ class FrequentlyUsedManager {
   
   /**
    * 注册事件监听器
-   * @param {string} event - 事件名称
-   * @param {Function} callback - 回调函数
    */
   on(event, callback) {
     if (!this.eventListeners.has(event)) {
@@ -435,8 +423,6 @@ class FrequentlyUsedManager {
   
   /**
    * 移除事件监听器
-   * @param {string} event - 事件名称
-   * @param {Function} callback - 回调函数
    */
   off(event, callback) {
     const listeners = this.eventListeners.get(event);
@@ -447,15 +433,11 @@ class FrequentlyUsedManager {
   
   /**
    * 触发事件
-   * @param {string} event - 事件名称
-   * @param {*} data - 事件数据
    */
   emit(event, data) {
-    // 优先使用全局eventBus
     if (this.eventBus) {
       this.eventBus.emit(event, data);
     } else {
-      // 降级到本地事件系统
       const listeners = this.eventListeners.get(event);
       if (listeners) {
         listeners.forEach(callback => {
@@ -469,15 +451,132 @@ class FrequentlyUsedManager {
     }
   }
   
-  // ==================== 统计和工具方法 ====================
+  // ==================== 工具方法 ====================
+  
+  /**
+   * 更新缓存
+   */
+  updateCache(data) {
+    this.cache = data;
+    this.lastSync = Date.now();
+  }
+  
+  /**
+   * 检查并迁移Edge数据
+   */
+  async checkAndMigrateEdgeData() {
+    const syncSupported = await this.isSyncStorageSupported();
+    if (!syncSupported) return;
+    
+    try {
+      const syncData = await this.loadFromSyncStorage();
+      const localData = await this.loadFromLocalStorage();
+      
+      if (syncData && syncData.urls && syncData.urls.length > 0 && 
+          (!localData || !localData.urls || localData.urls.length === 0)) {
+        console.log('🔄 Migrating data from sync to local storage for Edge compatibility...');
+        await this.migrateFromSyncToLocal();
+      }
+    } catch (error) {
+      console.warn('⚠️ Error during Edge data migration:', error.message);
+    }
+  }
+  
+  /**
+   * 尝试从同步存储恢复数据到本地存储
+   */
+  async migrateFromSyncToLocal() {
+    try {
+      const syncData = await this.loadFromSyncStorage();
+      
+      if (syncData && syncData.urls && syncData.urls.length > 0) {
+        await this.saveToLocalStorage(syncData);
+        console.log(`✅ Successfully migrated ${syncData.urls.length} frequently used websites to local storage`);
+        this.updateCache(syncData);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.warn('⚠️ Failed to migrate from sync storage:', error.message);
+      return false;
+    }
+  }
+  
+  /**
+   * 获取存储状态信息
+   */
+  async getStorageStatus() {
+    const browser = this.detectBrowser();
+    const syncSupported = await this.isSyncStorageSupported();
+    
+    let syncData = null;
+    let localData = null;
+    
+    try {
+      syncData = await this.loadFromSyncStorage();
+    } catch (error) {
+      console.warn('⚠️ Cannot read sync storage:', error.message);
+    }
+    
+    try {
+      localData = await this.loadFromLocalStorage();
+    } catch (error) {
+      console.warn('⚠️ Cannot read local storage:', error.message);
+    }
+    
+    return {
+      browser,
+      syncSupported,
+      syncDataCount: syncData?.urls?.length || 0,
+      localDataCount: localData?.urls?.length || 0,
+      hasSyncData: syncData && syncData.urls && syncData.urls.length > 0,
+      hasLocalData: localData && localData.urls && localData.urls.length > 0
+    };
+  }
+  
+  /**
+   * 显示存储状态通知
+   */
+  async showStorageStatusNotification() {
+    try {
+      const status = await this.getStorageStatus();
+      
+      let message = '';
+      let type = 'info';
+      
+      if (status.browser === 'edge') {
+        if (!status.syncSupported) {
+          message = '检测到Edge浏览器，同步存储不可用，将使用本地存储保存常用网页数据';
+          type = 'warning';
+        } else if (status.hasSyncData && !status.hasLocalData) {
+          message = '检测到同步存储中有数据，建议迁移到本地存储以确保Edge浏览器兼容性';
+          type = 'info';
+        } else if (status.hasLocalData) {
+          message = `本地存储中有 ${status.localDataCount} 个常用网页`;
+          type = 'success';
+        }
+      } else if (status.browser === 'chrome') {
+        if (status.hasSyncData) {
+          message = `同步存储中有 ${status.syncDataCount} 个常用网页`;
+          type = 'success';
+        }
+      }
+      
+      if (message) {
+        this.emit('storage-status-notification', { message, type, status });
+      }
+      
+    } catch (error) {
+      console.error('❌ Error showing storage status notification:', error);
+    }
+  }
   
   /**
    * 获取统计信息
-   * @returns {Object} 统计信息
    */
   getStats() {
     const data = this.cache || { urls: [] };
-    
     return {
       totalCount: data.urls.length,
       maxCount: this.maxCount,
@@ -488,22 +587,13 @@ class FrequentlyUsedManager {
   
   /**
    * 清空所有数据
-   * @returns {Promise<void>}
    */
   async clearAll() {
     try {
-      console.log('🗑️ Clearing all frequently used websites...');
-      
       const emptyData = { urls: [], maxCount: this.maxCount };
       await this.saveToStorage(emptyData);
-      
-      this.cache = emptyData;
-      this.lastSync = Date.now();
-      
-      console.log('✅ All frequently used websites cleared');
-      
+      this.updateCache(emptyData);
       this.emit('frequently-used-cleared', {});
-      
     } catch (error) {
       console.error('❌ Error clearing frequently used websites:', error);
       throw error;
@@ -512,17 +602,27 @@ class FrequentlyUsedManager {
   
   /**
    * 刷新缓存
-   * @returns {Promise<Object>} 刷新后的数据
    */
   async refreshCache() {
-    console.log('🔄 Refreshing frequently used websites cache...');
-    
     this.cache = null;
     this.lastSync = null;
-    
     return await this.getFrequentlyUsedWebsites();
+  }
+  
+  /**
+   * 强制使用本地存储
+   */
+  async forceUseLocalStorage() {
+    try {
+      await this.migrateFromSyncToLocal();
+      this.preferLocalStorage = true;
+    } catch (error) {
+      console.error('❌ Error forcing local storage mode:', error);
+      throw error;
+    }
   }
 }
 
 // 导出类
 window.FrequentlyUsedManager = FrequentlyUsedManager;
+

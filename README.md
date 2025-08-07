@@ -27,12 +27,21 @@
 - **现代化界面**：流畅动画和交互
 - **智能图标**：自动获取网站图标
 - **跨浏览器支持**：支持 Chrome 和 Edge 浏览器
+- **智能存储兼容**：自动检测浏览器类型，优化存储策略
 
 ## 🚀 使用方法
 
 1. **安装扩展**：在 Chrome 或 Edge 浏览器扩展管理页面加载解压缩扩展（开发者模式）
 2. **打开面板**：点击工具栏中的扩展图标
 3. **开始管理**：在新标签页中管理你的收藏夹
+
+### 🌐 Edge浏览器特别说明
+
+Edge浏览器用户请注意：
+- **自动兼容性检测**：扩展会自动检测Edge浏览器并优化存储策略
+- **数据迁移功能**：如果检测到同步存储数据，会自动迁移到本地存储
+- **存储状态通知**：会显示当前存储状态和兼容性信息
+- **测试工具**：可使用 `test-edge-compatibility.html` 测试兼容性
 
 ## 📁 项目结构
 
@@ -47,7 +56,7 @@ FavoriteBoard/
 │   ├── data/                 # 数据层
 │   │   ├── bookmark-manager.js # 收藏夹数据管理
 │   │   ├── data-processor.js # 数据处理
-│   │   └── frequently-used-manager.js # 常用网页管理
+│   │   └── frequently-used-manager.js # 常用网页管理（支持Edge兼容性）
 │   ├── ui/                   # UI管理层
 │   │   ├── ui-manager.js     # UI总管理器
 │   │   ├── sidebar-manager.js # 侧边栏
@@ -85,6 +94,7 @@ FavoriteBoard/
 │   └── images/              # 截图和示意图
 ├── background.js            # 后台服务脚本
 ├── index.html              # 主界面页面
+├── test-edge-compatibility.html # Edge兼容性测试页面
 └── manifest.json           # 扩展配置文件
 ```
 
@@ -197,6 +207,15 @@ const currentState = stateManager.getState();
 - 模块化设计，避免循环依赖
 
 ## 📝 更新日志
+
+### v2.1.1
+- ✅ 增强Edge浏览器兼容性支持
+- ✅ 智能存储策略：自动检测浏览器类型，优先使用本地存储
+- ✅ 数据迁移功能：自动从同步存储迁移到本地存储
+- ✅ 存储状态通知：显示当前存储状态和兼容性信息
+- ✅ 兼容性测试工具：新增 `test-edge-compatibility.html` 测试页面
+- ✅ 降级策略：同步存储失败时自动降级到本地存储
+- ✅ 双重备份：同时保存到同步和本地存储确保数据安全
 
 ### v2.1.0
 - ✅ 新增常用网页管理功能

@@ -41,6 +41,9 @@ class FrequentlyUsedPanel {
     this.eventBus.on('frequently-used-updated', this.handleWebsiteUpdated.bind(this), { unique: true });
     this.eventBus.on('frequently-used-error', this.handleError.bind(this), { unique: true });
     
+    // 监听存储状态通知
+    this.eventBus.on('storage-status-notification', this.handleStorageStatusNotification.bind(this), { unique: true });
+    
     // 监听收藏夹数据变化（可能需要更新网页信息）
     this.eventBus.on('bookmark-updated', this.handleBookmarkUpdate.bind(this), { unique: true });
     
@@ -401,6 +404,16 @@ class FrequentlyUsedPanel {
       // 收藏夹更新可能影响网页信息，重新加载数据
       this.refreshPanel();
     }
+  }
+
+  /**
+   * 处理存储状态通知
+   * @param {Object} eventData - 事件数据
+   */
+  handleStorageStatusNotification(eventData) {
+    const { message, type } = eventData;
+    console.log(`📦 Storage Status Notification: ${message} (${type})`);
+    this.showNotification(message, type);
   }
   
   // ==================== 交互处理方法 ====================
