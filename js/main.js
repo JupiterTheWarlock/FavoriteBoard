@@ -127,6 +127,24 @@ class ToolboxApp {
       throw error;
     }
   }
+
+  /**
+   * 初始化全局搜索组件
+   */
+  initSearch() {
+    try {
+      if (!this.eventBus || !this.stateManager) return;
+      if (!this.searchManager) {
+        this.searchManager = new SearchManager(this.eventBus, this.stateManager);
+      }
+      if (!this.searchResultsPanel) {
+        this.searchResultsPanel = new SearchResultsPanel(this.eventBus, this.stateManager);
+      }
+      console.log('✅ 全局搜索组件初始化完成');
+    } catch (error) {
+      console.error('❌ 全局搜索组件初始化失败:', error);
+    }
+  }
   
   /**
    * 设置状态订阅
@@ -271,6 +289,9 @@ class ToolboxApp {
       // 切换到默认Tab (Dashboard)
       this.switchToTab('dashboard');
       
+      // 初始化全局搜索（SearchManager + SearchResultsPanel）
+      this.initSearch();
+
       // 绑定事件
       this.bindEvents();
       
@@ -450,11 +471,14 @@ class ToolboxApp {
    */
   bindSearchEvents() {
     if (!this.searchInput) return;
-    
-    // 搜索输入事件
+    // 输入防抖
+    let debounceTimer = null;
     this.searchInput.addEventListener('input', (e) => {
       const query = e.target.value;
-      this.handleSearch(query);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        this.handleSearch(query);
+      }, 180);
     });
     
     // 清空搜索按钮
@@ -573,22 +597,10 @@ class ToolboxApp {
    * @param {string} query - 搜索查询
    */
   handleSearch(query) {
-    // 通过事件总线发布搜索查询变化事件
+    // 通过事件总线发布搜索查询变化事件（全局处理）
     if (this.eventBus) {
       this.eventBus.emit('search-query-changed', query);
     }
-    
-    // 获取当前激活的Tab
-    const activeTab = this.tabContainer.getActiveTab();
-    
-    if (!activeTab || !activeTab.supports('search')) {
-      return;
-    }
-    
-    // 转发搜索事件到当前Tab
-    activeTab.onSearch(query);
-    
-    // 清空按钮状态更新已由UIManager处理
   }
   
   /**
@@ -599,6 +611,14 @@ class ToolboxApp {
       this.searchInput.value = '';
       this.handleSearch('');
     }
+    // 清空后应恢复当前Tab内容（交给 SearchResultsPanel 已处理，但此处再兜底一次）
+    try {
+      const activeTab = this.tabContainer.getActiveTab();
+      if (this.tabContainer && activeTab) {
+        activeTab.isInitialized = false;
+        this.tabContainer.renderTab(activeTab, this.getTabContentContainer());
+      }
+    } catch {}
   }
   
   // ==================== 数据管理方法 ====================

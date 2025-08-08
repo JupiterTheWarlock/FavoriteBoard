@@ -24,7 +24,7 @@ class BaseTab {
     // 可配置选项
     this.options = {
       showSearch: true,           // 是否显示搜索栏
-      supportSearch: true,        // 是否支持搜索功能
+      supportSearch: true,        // 是否支持搜索功能（将逐步废弃，由全局搜索替代）
       lazyRender: false,         // 是否延迟渲染
       cache: true,               // 是否缓存渲染结果
       ...options
@@ -54,8 +54,8 @@ class BaseTab {
       return;
     }
     
-    // 监听搜索事件
-    this.eventBus.on('search-query-changed', this.handleSearch, { unique: true });
+    // 监听搜索事件（子类不再处理局部搜索，由全局搜索面板接管展示）
+    this.eventBus.on('search-query-changed', () => {}, { unique: true });
     
     // 监听窗口大小变化事件
     this.eventBus.on('window-resized', this.handleResize, { unique: true });
@@ -80,7 +80,7 @@ class BaseTab {
   cleanupEventListeners() {
     if (!this.eventBus) return;
     
-    this.eventBus.off('search-query-changed', this.handleSearch);
+    this.eventBus.off('search-query-changed');
     this.eventBus.off('window-resized', this.handleResize);
     this.eventBus.off('data-updated');
   }
@@ -150,9 +150,6 @@ class BaseTab {
     
     // 更新UI状态
     this.updateTabUI(false);
-    
-    // 清理搜索状态
-    this.clearSearch();
     
     // 发布Tab内部失活事件
     this.emitEvent('tab-internal-deactivated', {
@@ -253,12 +250,9 @@ class BaseTab {
    * @returns {boolean}
    */
   supports(feature) {
-    switch (feature) {
-      case 'search':
-        return this.options.supportSearch;
-      default:
-        return false;
-    }
+    // 搜索由全局处理，此方法保留向后兼容但恒为 false
+    if (feature === 'search') return false;
+    return false;
   }
   
   /**
@@ -434,15 +428,7 @@ class BaseTab {
    * @param {string} query - 搜索查询
    */
   handleSearch(query) {
-    if (this.supports('search')) {
-      this.onSearch(query);
-      
-      // 发布搜索处理事件
-      this.emitEvent('tab-search-handled', {
-        tabId: this.id,
-        query: query
-      });
-    }
+    // 不再由各 Tab 单独处理
   }
   
   /**

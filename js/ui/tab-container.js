@@ -243,6 +243,16 @@ class TabContainer {
       
       // 显示加载状态
       this.stateManager.setUIState({ loading: true }, 'tab-render');
+
+      // 清空容器，避免残留上一个Tab的内容
+      if (container) {
+        container.innerHTML = '';
+      }
+
+      // 强制本次进行实际渲染，避免因缓存导致不重绘
+      if (tab && tab.isInitialized && tab.options?.cache) {
+        tab.isInitialized = false;
+      }
       
       // 安全渲染Tab内容
       await tab.safeRender(container);

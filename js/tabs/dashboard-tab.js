@@ -8,7 +8,7 @@
 class DashboardTab extends BaseTab {
   constructor() {
     super('dashboard', 'FavoriteBoard', '📊', {
-      showSearch: false,
+      showSearch: true,
       supportSearch: false,
       cache: true
     });
@@ -378,7 +378,12 @@ class DashboardTab extends BaseTab {
 
   onActivate() {
     super.onActivate();
-    this.refreshData();
+    // 每次激活都确保渲染与数据是当前的（但不重复播放过程动画）
+    try {
+      if (this.container) {
+        this.renderDashboardContent(this.container);
+      }
+    } catch (e) {}
   }
   onDeactivate() {
     super.onDeactivate();

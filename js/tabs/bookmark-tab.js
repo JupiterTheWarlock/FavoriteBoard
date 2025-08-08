@@ -18,7 +18,6 @@ class BookmarkTab extends BaseTab {
     this.folderData = folderData;
     this.currentLinks = [];
     this.filteredLinks = [];
-    this.searchQuery = '';
     
     // 卡片交互管理器
     this.cardInteractionManager = null;
@@ -191,10 +190,7 @@ class BookmarkTab extends BaseTab {
     
     // 如果没有链接，显示空状态
     if (this.filteredLinks.length === 0) {
-      const emptyState = createEmptyState(
-        this.searchQuery ? `没有找到包含 "${this.searchQuery}" 的链接` : '此文件夹没有收藏',
-        this.searchQuery ? '🔍' : '📭'
-      );
+      const emptyState = createEmptyState('此文件夹没有收藏', '📭');
       gridContainer.appendChild(emptyState);
       return gridContainer;
     }
@@ -363,42 +359,7 @@ class BookmarkTab extends BaseTab {
     // 卡片交互管理器会自动处理全局事件
   }
   
-  // ==================== 搜索和筛选方法 ====================
-  
-  /**
-   * 处理搜索
-   * @param {string} query - 搜索查询
-   */
-  onSearch(query) {
-    this.searchQuery = query.toLowerCase().trim();
-    this.applyFilters();
-    
-    // 重新渲染链接网格
-    const gridContainer = this.container?.querySelector('.links-grid-container');
-    if (gridContainer) {
-      const newGrid = this.renderLinksGrid();
-      gridContainer.replaceWith(newGrid);
-    }
-  }
-  
-  /**
-   * 应用筛选条件
-   */
-  applyFilters() {
-    if (!this.searchQuery) {
-      // 没有搜索条件，显示所有链接
-      this.filteredLinks = [...this.currentLinks];
-    } else {
-      // 根据搜索条件筛选链接
-      this.filteredLinks = this.currentLinks.filter(link => {
-        return link.title.toLowerCase().includes(this.searchQuery) ||
-               link.url.toLowerCase().includes(this.searchQuery) ||
-               getDomainFromUrl(link.url).toLowerCase().includes(this.searchQuery);
-      });
-    }
-    
-    console.log(`🔍 筛选结果: ${this.filteredLinks.length}/${this.currentLinks.length} 个链接`);
-  }
+  // 已移除：局部搜索与筛选逻辑（统一由全局搜索管理器处理）
   
   // ==================== 右键菜单相关方法 ====================
   // （这些方法已移动到 CardInteractionManager 中）

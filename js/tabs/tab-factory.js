@@ -27,7 +27,7 @@ class TabFactory {
       className: 'DashboardTab',
       singleton: true,  // 单例模式
       options: {
-        showSearch: false,
+        showSearch: true,
         supportSearch: false
       }
     });
