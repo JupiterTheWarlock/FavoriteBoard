@@ -540,31 +540,54 @@ class FrequentlyUsedManager {
    */
   async showStorageStatusNotification() {
     try {
-      const status = await this.getStorageStatus();
-      
+      const syncSupported = await this.isSyncStorageSupported();
       let message = '';
       let type = 'info';
-      
-      if (status.browser === 'edge') {
-        if (!status.syncSupported) {
-          message = '检测到Edge浏览器，同步存储不可用，将使用本地存储保存常用网页数据';
-          type = 'warning';
-        } else if (status.hasSyncData && !status.hasLocalData) {
-          message = '检测到同步存储中有数据，建议迁移到本地存储以确保Edge浏览器兼容性';
-          type = 'info';
-        } else if (status.hasLocalData) {
-          message = `本地存储中有 ${status.localDataCount} 个常用网页`;
-          type = 'success';
+
+      if (syncSupported) {
+        // 优先显示在线(同步)存储的数量与URL详情
+        let syncData = { urls: [] };
+        try {
+          syncData = await this.loadFromSyncStorage();
+        } catch (e) {
+          console.warn('⚠️ 读取在线存储失败:', e.message);
         }
-      } else if (status.browser === 'chrome') {
-        if (status.hasSyncData) {
-          message = `同步存储中有 ${status.syncDataCount} 个常用网页`;
-          type = 'success';
+
+        const urls = Array.isArray(syncData?.urls)
+          ? syncData.urls.map(item => item?.url).filter(u => typeof u === 'string')
+          : [];
+
+        const count = urls.length;
+        const previewCount = Math.min(count, 10);
+        const preview = urls.slice(0, previewCount).join(' | ');
+        const tail = count > previewCount ? ' 等' : '';
+
+        message = `在线存储中有 ${count} 个常用网页${count > 0 ? `：${preview}${tail}` : ''}`;
+        type = 'success';
+      } else {
+        // 在线存储不可用时，降级展示本地存储，同时明确说明
+        let localData = { urls: [] };
+        try {
+          localData = await this.loadFromLocalStorage();
+        } catch (e) {
+          console.warn('⚠️ 读取本地存储失败:', e.message);
         }
+
+        const urls = Array.isArray(localData?.urls)
+          ? localData.urls.map(item => item?.url).filter(u => typeof u === 'string')
+          : [];
+
+        const count = urls.length;
+        const previewCount = Math.min(count, 10);
+        const preview = urls.slice(0, previewCount).join(' | ');
+        const tail = count > previewCount ? ' 等' : '';
+
+        message = `在线存储不可用，当前本地存储有 ${count} 个常用网页${count > 0 ? `：${preview}${tail}` : ''}`;
+        type = 'warning';
       }
-      
+
       if (message) {
-        this.emit('storage-status-notification', { message, type, status });
+        this.emit('storage-status-notification', { message, type });
       }
       
     } catch (error) {
