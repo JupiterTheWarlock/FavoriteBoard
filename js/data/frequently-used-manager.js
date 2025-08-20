@@ -1,4 +1,4 @@
-// FavoriteBoard Plugin - Frequently Used Websites Manager
+// FavoriteBoard - Frequently Used Websites Manager
 // 常用网页数据管理器
 
 /**
@@ -9,7 +9,7 @@
 class FrequentlyUsedManager {
   constructor(eventBus = null) {
     this.eventBus = eventBus;
-    this.storageKey = 'frequentlyUsedWebsites';
+    this.storageKey = 'FavoriteBoard_frequentlyUsedWebsites';
     this.maxCount = null;
     this.cache = null;
     this.lastSync = null;
@@ -587,7 +587,7 @@ class FrequentlyUsedManager {
       }
 
       if (message) {
-        this.emit('storage-status-notification', { message, type });
+        //this.emit('storage-status-notification', { message, type });
       }
       
     } catch (error) {
