@@ -375,8 +375,8 @@ class BookmarkTab extends BaseTab {
       
       // 获取应用实例
       const app = window.linkBoardApp;
-      if (!app || !app.dialogManager) {
-        throw new Error('应用实例或对话框管理器不可用');
+      if (!app || !app.uiManager) {
+        throw new Error('应用实例或UI管理器不可用');
       }
       
       // 创建自定义移动对话框
@@ -633,12 +633,18 @@ class BookmarkTab extends BaseTab {
       
       // 获取应用实例
       const app = window.linkBoardApp;
-      if (!app || !app.dialogManager) {
-        throw new Error('应用实例或对话框管理器不可用');
+      if (!app || !app.uiManager) {
+        throw new Error('应用实例或UI管理器不可用');
+      }
+      
+      // 获取对话框管理器
+      const dialogManager = app.uiManager.getDialogManager();
+      if (!dialogManager) {
+        throw new Error('对话框管理器不可用');
       }
       
       // 创建删除确认对话框
-      const deleteDialog = app.dialogManager.create({
+      const deleteDialog = dialogManager.create({
         title: '删除收藏',
         message: `确定要删除收藏"${link.title}"吗？`,
         warning: '此操作不可撤销',

@@ -27,8 +27,10 @@ class CardContextMenu {
       // 隐藏现有菜单
       this.hideCurrentMenu();
       
-      // 保存当前上下文
+      // 保存当前上下文和回调函数
       this.currentBookmarkForContext = link;
+      this.onMoveRequested = config.onMoveRequested;
+      this.onDeleteRequested = config.onDeleteRequested;
       
       const {
         enableMove = true,
@@ -266,14 +268,12 @@ class CardContextMenu {
         throw new Error('对话框管理器不可用');
       }
       
-      // 创建移动对话框
-      dialogManager.showFolderSelectorDialog({
-        title: '移动到文件夹',
-        message: `选择要将"${link.title}"移动到的文件夹:`,
-        onConfirm: async (targetFolderId) => {
-          await this.executeMoveBookmark(link, targetFolderId, card);
-        }
-      });
+      // 使用BookmarkTab中的移动对话框逻辑
+      if (this.onMoveRequested) {
+        this.onMoveRequested(link);
+      } else {
+        throw new Error('移动功能未配置');
+      }
       
     } catch (error) {
       console.error('❌ 显示移动对话框失败:', error);
@@ -334,17 +334,12 @@ class CardContextMenu {
         throw new Error('对话框管理器不可用');
       }
       
-      // 显示确认对话框
-      dialogManager.showConfirmDialog({
-        title: '删除收藏',
-        message: `确定要删除"${link.title}"吗？此操作无法撤销。`,
-        confirmText: '删除',
-        cancelText: '取消',
-        danger: true,
-        onConfirm: async () => {
-          await this.executeDeleteBookmark(link, card);
-        }
-      });
+      // 使用BookmarkTab中的删除对话框逻辑
+      if (this.onDeleteRequested) {
+        this.onDeleteRequested(link, card);
+      } else {
+        throw new Error('删除功能未配置');
+      }
       
     } catch (error) {
       console.error('❌ 显示删除确认对话框失败:', error);
