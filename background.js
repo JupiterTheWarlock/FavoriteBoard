@@ -392,28 +392,45 @@ async function handleGetFavicon(url) {
       return { success: true, favicon: cached[cacheKey] };
     }
     
-    // 首先尝试使用扩展内部的 favicon API
+    // 首先尝试使用标准的 domain/favicon.ico API
+    const domainFaviconUrl = `https://${domain}/favicon.ico`;
+    
+    try {
+      const response = await fetch(domainFaviconUrl, {
+        method: 'HEAD', // 只检查头部，不下载内容
+        timeout: 5000   // 5秒超时
+      });
+      
+      if (response.ok && response.headers.get('content-type')?.includes('image')) {
+        await chrome.storage.local.set({ [cacheKey]: domainFaviconUrl });
+        return { success: true, favicon: domainFaviconUrl };
+      }
+    } catch (e) {
+      console.warn('⚠️ 标准favicon路径不可用:', e.message);
+    }
+    
+    // 备选方案1：尝试使用扩展内部的 favicon API
     const extensionFaviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`;
     
     try {
-      // 测试扩展 favicon 是否可用
+      console.log('🔍 尝试扩展内部favicon API');
       const response = await fetch(extensionFaviconUrl);
       if (response.ok) {
         await chrome.storage.local.set({ [cacheKey]: extensionFaviconUrl });
         return { success: true, favicon: extensionFaviconUrl };
       }
     } catch (e) {
-      console.warn('⚠️ Extension favicon not available, falling back to Google service');
+      console.warn('⚠️ 扩展内部favicon API不可用:', e.message);
     }
     
-    // 后备方案：使用 Google favicon 服务
+    // 备选方案2：使用 Google favicon 服务
     const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
     
     try {
       await chrome.storage.local.set({ [cacheKey]: googleFaviconUrl });
       return { success: true, favicon: googleFaviconUrl };
     } catch (error) {
-      console.error('❌ Error getting favicon:', error);
+      console.error('❌ Google favicon服务失败:', error);
       return { 
         success: false, 
         error: error.message,
@@ -426,7 +443,7 @@ async function handleGetFavicon(url) {
       };
     }
   } catch (error) {
-    console.error('❌ Error in handleGetFavicon:', error);
+    console.error('❌ handleGetFavicon执行错误:', error);
     return { 
       success: false, 
       error: error.message,

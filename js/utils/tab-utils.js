@@ -44,7 +44,7 @@ function getSafeIcon(iconUrl, websiteUrl = null) {
   if (websiteUrl) {
     try {
       const domain = new URL(websiteUrl).hostname;
-      return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+      return `https://${domain}/favicon.ico`;
     } catch (e) {
       console.warn('无法解析网站URL生成favicon:', websiteUrl);
     }

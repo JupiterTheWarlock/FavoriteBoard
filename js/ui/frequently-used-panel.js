@@ -297,24 +297,36 @@ class FrequentlyUsedPanel {
       fallbackAttempts++;
       
       if (fallbackAttempts === 1) {
-        // 尝试Google favicon服务
+        // 首先尝试标准的 domain/favicon.ico 路径
+        try {
+          const domain = new URL(url).hostname;
+          iconImg.src = `https://${domain}/favicon.ico`;
+          console.log('🔍 尝试标准favicon路径:', `https://${domain}/favicon.ico`);
+          return;
+        } catch (e) {
+          console.warn('⚠️ 无法解析URL生成标准favicon路径:', url);
+        }
+      }
+      
+      if (fallbackAttempts === 2) {
+        // 备选方案1：尝试Google favicon服务
         try {
           const domain = new URL(url).hostname;
           iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
           return;
         } catch (e) {
-          console.warn('无法解析URL生成favicon:', url);
+          console.warn('⚠️ 无法解析URL生成Google favicon:', url);
         }
       }
       
-      if (fallbackAttempts === 2) {
-        // 尝试DuckDuckGo favicon服务
+      if (fallbackAttempts === 3) {
+        // 备选方案2：尝试DuckDuckGo favicon服务
         try {
           const domain = new URL(url).hostname;
           iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
           return;
         } catch (e) {
-          console.warn('无法解析URL生成favicon:', url);
+          console.warn('⚠️ 无法解析URL生成DuckDuckGo favicon:', url);
         }
       }
       
