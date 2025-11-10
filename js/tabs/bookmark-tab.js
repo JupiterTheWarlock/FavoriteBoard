@@ -143,8 +143,8 @@ class BookmarkTab extends BaseTab {
     const allLinks = stateManager.getStateValue('data.allLinks') || [];
     const folderMap = stateManager.getStateValue('data.folderMap') || new Map();
     
-    // 获取文件夹及其子文件夹的ID
-    const folderIds = DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
+    // 获取文件夹及其子文件夹的ID（使用工具函数，不直接调用DataProcessor）
+    const folderIds = getFolderAndSubfolderIds(folderId, folderMap);
     
     // 筛选属于这些文件夹的链接 - 确保类型一致性
     const matchedLinks = allLinks.filter(link => {

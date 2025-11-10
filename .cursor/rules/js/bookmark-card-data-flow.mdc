@@ -1,0 +1,844 @@
+---
+description: 收藏夹数据流相关信息
+alwaysApply: false
+---
+# FavoriteBoard 链接卡片数据流规范
+
+## 🎯 核心概念
+
+### 链接卡片（Bookmark Card）
+链接卡片是 FavoriteBoard 项目的核心数据单元，封装了每个收藏网页的完整信息。所有需要获取收藏夹信息的代码，统一通过缓存链接卡片的地方获取数据。
+
+## 📊 标准数据流
+
+### 数据流向（单向数据流）
+```
+浏览器收藏夹 API
+  ↓
+Background Script 处理和缓存
+  ↓
+BookmarkManager 获取原始数据
+  ↓
+DataProcessor 转换为链接卡片
+  ↓
+StateManager 集中状态管理
+  ↓
+UI层（Tab/Component）渲染
+```
+
+### 禁止的数据流向
+```
+❌ UI层 → 直接调用 Chrome Bookmarks API
+❌ UI层 → 直接调用 BookmarkManager.loadBookmarks()
+❌ 组件 → 直接处理原始收藏夹数据
+```
+
+## 🗂️ 链接卡片数据结构
+
+### 标准链接卡片格式
+```javascript
+{
+  // 必需字段
+  id: string,              // 书签ID（Chrome API提供）
+  title: string,           // 网页标题
+  url: string,             // 网页URL
+  parentId: string,        // 父文件夹ID
+  folderId: string,        // 所属文件夹ID（与parentId相同）
+  dateAdded: number,       // 添加时间戳（毫秒）
+  
+  // 可选字段
+  iconUrl: string,         // 网站图标URL
+  dateGrouped: string,     // 日期分组标识（如 "2024-01"）
+  domain: string          // 网站域名（从URL提取）
+}
+```
+
+### 字段说明
+- **id**: 书签的唯一标识符，由 Chrome Bookmarks API 生成
+- **title**: 网页的标题，用于卡片展示和搜索
+- **url**: 网页的完整URL，用于跳转和域名提取
+- **parentId**: 直接父文件夹的ID
+- **folderId**: 与parentId相同，用于文件夹筛选
+- **iconUrl**: 网站图标的URL，优先使用缓存的图标
+- **dateAdded**: 添加到收藏夹的时间戳（Chrome API提供）
+- **dateGrouped**: 用于按时间分组显示的标识
+- **domain**: 从URL提取的域名，用于搜索和显示
+
+## 🏗️ 数据层架构
+
+### 1. 数据源层 (Data Source Layer)
+**位置**: `background.js`
+
+**职责**:
+- 从 Chrome Bookmarks API 获取原始收藏夹数据
+- 处理收藏夹树结构，生成 `flatBookmarks` 和 `folderMap`
+- 缓存到 `chrome.storage.local`
+- 监听收藏夹变更事件并更新缓存
+
+**关键方法**:
+```javascript
+// 处理收藏夹树结构
+async function processBookmarkTree(bookmarkTree) {
+  const result = {
+    tree: bookmarkTree,
+    totalBookmarks: 0,
+    totalFolders: 0,
+    flatBookmarks: [],    // 扁平化的书签列表
+    folderMap: {}         // 文件夹映射表
+  };
+  // ... 处理逻辑
+  return result;
+}
+```
+
+**输出格式**:
+```javascript
+{
+  tree: Array,              // 原始树结构
+  totalBookmarks: number,   // 书签总数
+  totalFolders: number,     // 文件夹总数
+  flatBookmarks: Array,     // 扁平化书签列表
+  folderMap: Object         // 文件夹映射表
+}
+```
+
+### 2. 数据管理层 (Data Management Layer)
+**位置**: `js/data/bookmark-manager.js`
+
+**职责**:
+- 从 background script 获取缓存数据
+- 管理数据缓存的生命周期（5分钟有效期）
+- 提供数据查询接口
+- 触发数据更新事件
+
+**关键方法**:
+```javascript
+class BookmarkManager {
+  // 加载收藏夹数据（带缓存）
+  async loadBookmarks(forceRefresh = false) {
+    // 1. 检查缓存有效性
+    if (!forceRefresh && this.cache && this.isCacheValid()) {
+      return this.cache;
+    }
+    
+    // 2. 从background获取数据
+    const response = await this.sendMessage({ action: 'getBookmarksCache' });
+    
+    // 3. 更新缓存
+    this.cache = response.data;
+    this.lastSync = response.lastSync;
+    
+    // 4. 触发事件
+    this.emit('bookmarks-loaded', this.cache);
+    
+    return this.cache;
+  }
+  
+  // 获取所有收藏夹（原始数据）
+  getAllBookmarks() {
+    return this.cache?.flatBookmarks || [];
+  }
+}
+```
+
+**重要规则**:
+- ✅ **允许**: ToolboxApp 在初始化时调用 `loadBookmarks()`
+- ✅ **允许**: 数据更新时调用 `loadBookmarks(true)` 强制刷新
+- ❌ **禁止**: UI组件直接调用 `loadBookmarks()`
+- ❌ **禁止**: 绕过 BookmarkManager 直接调用 Chrome API
+- ⚠️ **警告**: `getAllBookmarks()`, `getBookmarksInFolder()`, `getFolderTree()`, `searchBookmarks()` 等方法返回原始数据，不应被UI组件使用
+
+**实际代码示例**:
+```javascript
+// ✅ 正确：ToolboxApp 调用 loadBookmarks()
+// js/main.js:578
+const bookmarksData = await this.bookmarkManager.loadBookmarks();
+
+// ❌ 错误：UI组件直接调用 BookmarkManager 方法
+// 应该通过 StateManager 获取处理后的数据
+```
+
+### 3. 数据处理层 (Data Processing Layer)
+**位置**: `js/data/data-processor.js`
+
+**职责**:
+- 将原始书签数据转换为标准链接卡片格式
+- 生成文件夹树结构
+- 构建文件夹映射表
+
+**关键方法**:
+```javascript
+class DataProcessor {
+  /**
+   * 生成所有链接数据（链接卡片）
+   * @param {Object} bookmarkCache - 收藏夹缓存数据
+   * @returns {Array} 处理后的链接卡片数组
+   */
+  static generateAllLinks(bookmarkCache) {
+    const allBookmarks = bookmarkCache?.flatBookmarks || [];
+    
+    return allBookmarks.map(bookmark => ({
+      id: bookmark.id,
+      title: bookmark.title,
+      url: bookmark.url,
+      parentId: bookmark.parentId,
+      folderId: bookmark.parentId,
+      iconUrl: bookmark.iconUrl || this.generateFaviconUrl(bookmark.url),
+      dateAdded: bookmark.dateAdded,
+      dateGrouped: bookmark.dateGrouped,
+      domain: bookmark.domain || this.extractDomain(bookmark.url)  // 确保domain字段存在
+    }));
+  }
+  
+  /**
+   * 生成文件夹树
+   */
+  static generateFolderTree(bookmarkCache) {
+    // ... 处理逻辑
+  }
+  
+  /**
+   * 构建文件夹映射表
+   */
+  static buildFolderMap(folderTree, originalFolderMap) {
+    // ... 处理逻辑
+  }
+}
+```
+
+**重要规则**:
+- ✅ **允许**: StateManager 调用 DataProcessor 的静态方法
+- ❌ **禁止**: UI组件直接调用 DataProcessor
+- ⚠️ **注意**: DataProcessor 必须是无副作用的纯函数
+- ⚠️ **已废弃**: `getFolderAndSubfolderIds()` 已移至 `js/utils/data-utils.js`，UI组件应使用工具函数
+
+**实际代码示例**:
+```javascript
+// ✅ 正确：StateManager 调用 DataProcessor
+// js/core/state-manager.js:190-191
+const folderTree = DataProcessor.generateFolderTree(bookmarksData);
+const allLinks = DataProcessor.generateAllLinks(bookmarksData);
+
+// ❌ 错误：UI组件直接调用 DataProcessor
+// 应该使用工具函数 getFolderAndSubfolderIds() 而不是 DataProcessor.getFolderAndSubfolderIds()
+```
+
+### 4. 状态管理层 (State Management Layer)
+**位置**: `js/core/state-manager.js`
+
+**职责**:
+- 集中管理应用状态（包括链接卡片数据）
+- 提供统一的数据访问接口
+- 触发状态变更通知
+
+**关键方法**:
+```javascript
+class StateManager {
+  /**
+   * 处理收藏夹数据更新（唯一入口）
+   */
+  async processBookmarksData(bookmarksData, source = 'bookmark-manager') {
+    console.log('📊 [StateManager] 开始处理收藏夹数据...');
+    
+    // 更新加载状态
+    this.setUIState({ loading: true }, 'data-processing');
+    
+    // 使用DataProcessor处理数据
+    const folderTree = DataProcessor.generateFolderTree(bookmarksData);
+    const allLinks = DataProcessor.generateAllLinks(bookmarksData);
+    const folderMap = DataProcessor.buildFolderMap(folderTree, bookmarksData.folderMap);
+    
+    // 更新数据状态
+    this.setDataState({
+      bookmarks: bookmarksData,    // 原始数据（用于调试）
+      folderTree: folderTree,      // 文件夹树
+      allLinks: allLinks,          // 链接卡片列表 ✨
+      folderMap: folderMap,        // 文件夹映射表
+      lastSync: Date.now()
+    }, source);
+    
+    // 完成加载
+    this.setUIState({ loading: false }, 'data-processing');
+    
+    return { folderTree, allLinks, folderMap };
+  }
+  
+  /**
+   * 获取链接卡片数据（推荐方法）
+   */
+  getStateValue('data.allLinks')  // 返回所有链接卡片
+}
+```
+
+**状态结构**:
+```javascript
+{
+  data: {
+    bookmarks: Object,        // 原始收藏夹数据缓存
+    folderTree: Array,        // 文件夹树结构
+    allLinks: Array,          // 链接卡片列表 ⭐
+    folderMap: Map,           // 文件夹映射表
+    lastSync: number          // 最后同步时间
+  },
+  ui: { /* UI状态 */ },
+  tabs: { /* Tab状态 */ }
+}
+```
+
+**重要规则**:
+- ✅ **允许**: UI组件通过 `getStateValue('data.allLinks')` 获取链接卡片
+- ✅ **允许**: 订阅 `subscribe(['data.allLinks'], callback)` 监听变化
+- ❌ **禁止**: 直接修改 `state.data.allLinks`
+- ❌ **禁止**: 绕过 StateManager 直接处理数据
+- ⚠️ **注意**: `handleDataUpdate()` 不再直接更新状态，数据应通过 `processBookmarksData()` 统一处理
+
+**实际代码示例**:
+```javascript
+// ✅ 正确：通过 processBookmarksData() 统一处理数据
+// js/core/state-manager.js:182-222
+async processBookmarksData(bookmarksData, source = 'bookmark-manager') {
+  const folderTree = DataProcessor.generateFolderTree(bookmarksData);
+  const allLinks = DataProcessor.generateAllLinks(bookmarksData);
+  const folderMap = DataProcessor.buildFolderMap(folderTree, bookmarksData.folderMap);
+  
+  this.setDataState({
+    bookmarks: bookmarksData,
+    folderTree: folderTree,
+    allLinks: allLinks,  // 链接卡片列表
+    folderMap: folderMap,
+    lastSync: Date.now()
+  }, source);
+}
+
+// ❌ 错误：handleDataUpdate() 直接更新状态（已修复）
+// 现在 handleDataUpdate() 只做验证，不更新状态
+```
+
+### 5. UI渲染层 (UI Rendering Layer)
+**位置**: `js/tabs/*.js`, `js/ui/*.js`
+
+**职责**:
+- 从 StateManager 获取链接卡片数据
+- 渲染链接卡片 UI
+- 处理用户交互
+
+**标准实现模式**:
+```javascript
+class BookmarkTab extends BaseTab {
+  /**
+   * 加载收藏夹数据
+   */
+  async loadBookmarkData(app) {
+    try {
+      // 1. 从StateManager获取数据
+      const stateManager = app.stateManager;
+      const allLinks = stateManager.getStateValue('data.allLinks') || [];
+      
+      // 2. 根据文件夹ID筛选链接（使用工具函数，不直接调用DataProcessor）
+      if (this.folderId === 'all') {
+        this.currentLinks = [...allLinks];
+      } else if (this.folderId) {
+        this.currentLinks = this.getLinksForFolder(stateManager, this.folderId);
+      }
+      
+      // getLinksForFolder() 内部使用工具函数 getFolderAndSubfolderIds()
+      // 而不是直接调用 DataProcessor.getFolderAndSubfolderIds()
+      
+      // 3. 排序处理
+      this.currentLinks.sort((a, b) => {
+        const aTime = parseInt(a.dateAdded) || 0;
+        const bTime = parseInt(b.dateAdded) || 0;
+        return bTime - aTime; // 倒序：最新的在前
+      });
+      
+    } catch (error) {
+      console.error('❌ 加载收藏夹数据失败:', error);
+      this.currentLinks = [];
+    }
+  }
+  
+  /**
+   * 创建链接卡片
+   */
+  createLinkCard(link) {
+    const card = document.createElement('div');
+    card.className = 'link-card';
+    card.dataset.linkId = link.id;
+    card.dataset.url = link.url;
+    
+    // 使用链接卡片数据渲染
+    card.innerHTML = `
+      <div class="card-header">
+        <img class="card-icon" src="${getSafeIcon(link.iconUrl, link.url)}">
+        <h3 class="card-title">${escapeHtml(link.title)}</h3>
+      </div>
+      <div class="card-description">
+        <span class="link-url">${escapeHtml(getDomainFromUrl(link.url))}</span>
+        <span class="link-time">${formatTime(link.dateAdded)}</span>
+      </div>
+    `;
+    
+    return card;
+  }
+}
+```
+
+**重要规则**:
+- ✅ **允许**: 从 StateManager 获取 `data.allLinks`
+- ✅ **允许**: 对获取的数据进行筛选、排序等本地操作
+- ❌ **禁止**: 直接调用 BookmarkManager 或 DataProcessor
+- ❌ **禁止**: 修改从 StateManager 获取的数据（只读）
+
+## 🔄 数据更新流程
+
+### 1. 收藏夹变更监听
+**触发点**: background.js 监听 Chrome Bookmarks API 事件
+
+```javascript
+// background.js
+chrome.bookmarks.onCreated.addListener(handleBookmarkCreated);
+chrome.bookmarks.onRemoved.addListener(handleBookmarkRemoved);
+chrome.bookmarks.onChanged.addListener(handleBookmarkChanged);
+chrome.bookmarks.onMoved.addListener(handleBookmarkMoved);
+
+async function handleBookmarkCreated(id, bookmark) {
+  console.log('➕ Bookmark created:', bookmark.title);
+  await refreshBookmarksCache();                // 刷新缓存
+  notifyTabsOfUpdate('bookmark-created', data); // 通知UI
+}
+```
+
+### 2. 数据更新传播
+```
+Chrome API 事件
+  ↓
+background.js 刷新缓存
+  ↓
+通知 ToolboxApp (via chrome.runtime.onMessage)
+  ↓
+BookmarkManager.loadBookmarks(true) 强制刷新
+  ↓
+StateManager.processBookmarksData() 处理数据
+  ↓
+触发 'bookmarks-updated' 事件
+  ↓
+UI组件重新渲染
+```
+
+### 3. 应用层数据更新处理
+**位置**: `js/main.js` - ToolboxApp
+
+```javascript
+class ToolboxApp {
+  /**
+   * 处理收藏夹更新
+   */
+  async handleBookmarkUpdate(action, data) {
+    console.log(`🔄 [ToolboxApp] 处理收藏夹更新: ${action}`);
+    
+    try {
+      // 1. 重新加载数据
+      const bookmarksData = await this.bookmarkManager.loadBookmarks(true);
+      
+      // 2. 处理数据并更新状态
+      await this.stateManager.processBookmarksData(bookmarksData, 'bookmark-update');
+      
+      // 3. 通知UI组件更新
+      this.eventBus.emit('data-updated', {
+        action: action,
+        data: {
+          folderTree: this.stateManager.getStateValue('data.folderTree'),
+          allLinks: this.stateManager.getStateValue('data.allLinks'),
+          folderMap: this.stateManager.getStateValue('data.folderMap')
+        }
+      });
+      
+      // 4. 刷新当前Tab
+      if (this.tabContainer && this.tabContainer.activeTab) {
+        this.tabContainer.activeTab.onDataUpdate(action, data);
+      }
+      
+    } catch (error) {
+      console.error('❌ 处理收藏夹更新失败:', error);
+    }
+  }
+}
+```
+
+## 📝 编码规范
+
+### 1. 获取链接卡片数据
+
+#### ✅ 正确方式
+```javascript
+// 在Tab或Component中
+class MyTab extends BaseTab {
+  async loadData() {
+    // 方式1: 直接从StateManager获取
+    const app = window.linkBoardApp;
+    const allLinks = app.stateManager.getStateValue('data.allLinks') || [];
+    
+    // 方式2: 订阅状态变化
+    app.stateManager.subscribe(['data.allLinks'], ([allLinks]) => {
+      this.updateUI(allLinks);
+    });
+  }
+}
+```
+
+#### ❌ 错误方式
+```javascript
+// ❌ 直接调用BookmarkManager
+const bookmarks = await app.bookmarkManager.loadBookmarks();
+const links = bookmarks.flatBookmarks; // 错误：应该使用处理后的allLinks
+
+// ❌ 直接调用DataProcessor
+const links = DataProcessor.generateAllLinks(rawData); // 错误：应该从StateManager获取
+const folderIds = DataProcessor.getFolderAndSubfolderIds(folderId, folderMap); // 错误：应使用工具函数
+
+// ❌ 直接访问State内部属性
+const links = app.stateManager.state.data.allLinks; // 错误：应该使用getStateValue()
+
+// ❌ 使用BookmarkManager返回原始数据的方法
+const bookmarks = app.bookmarkManager.getAllBookmarks(); // 错误：应使用StateManager
+```
+
+### 2. 处理收藏夹操作
+
+#### ✅ 正确方式
+```javascript
+// 移动/删除收藏夹
+async moveBookmark(link, targetFolderId) {
+  const app = window.linkBoardApp;
+  
+  // 通过BookmarkManager执行操作
+  const success = await app.bookmarkManager.moveBookmark(link.id, targetFolderId);
+  
+  if (success) {
+    // BookmarkManager会自动触发数据更新
+    // 不需要手动刷新数据
+  }
+}
+```
+
+#### ❌ 错误方式
+```javascript
+// ❌ 直接调用Chrome API
+await chrome.bookmarks.move(link.id, { parentId: targetFolderId });
+
+// ❌ 手动更新StateManager
+app.stateManager.setState({
+  data: { allLinks: newLinks } // 错误：数据应该由processBookmarksData统一处理
+});
+```
+
+### 3. 筛选和排序链接
+
+#### ✅ 正确方式
+```javascript
+// 在UI组件中进行本地筛选和排序
+loadBookmarkData() {
+  const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
+  
+  // 筛选特定文件夹的链接
+  const folderLinks = allLinks.filter(link => 
+    link.folderId === this.folderId
+  );
+  
+  // 按时间倒序排序
+  folderLinks.sort((a, b) => {
+    return parseInt(b.dateAdded) - parseInt(a.dateAdded);
+  });
+  
+  this.currentLinks = folderLinks;
+}
+```
+
+#### ❌ 错误方式
+```javascript
+// ❌ 修改原始数据
+const allLinks = this.stateManager.getStateValue('data.allLinks');
+allLinks[0].title = 'Modified'; // 错误：不要修改状态数据
+
+// ❌ 在DataProcessor中做筛选
+DataProcessor.filterLinksByFolder(allLinks, folderId); // 错误：DataProcessor应该只处理数据转换
+```
+
+## 🎯 最佳实践
+
+### 1. 数据获取原则
+- **单一数据源**: 所有链接卡片数据必须从 `StateManager.state.data.allLinks` 获取
+- **只读数据**: 从 StateManager 获取的数据只能读取，不能修改
+- **本地处理**: 筛选、排序等操作在UI组件本地进行，不影响全局状态
+
+### 2. 状态订阅原则
+```javascript
+// ✅ 使用subscribe监听数据变化
+stateManager.subscribe(['data.allLinks'], ([allLinks]) => {
+  this.updateUI(allLinks);
+}, { immediate: true });
+
+// ✅ 组件销毁时取消订阅
+destroy() {
+  this.unsubscribe();
+}
+```
+
+### 3. 数据更新原则
+- **统一入口**: 所有数据更新必须通过 `ToolboxApp.handleBookmarkUpdate()` 处理
+- **自动刷新**: BookmarkManager 操作完成后自动触发数据刷新
+- **事件通知**: 数据更新后通过 EventBus 通知所有相关组件
+
+### 4. 性能优化原则
+```javascript
+// ✅ 缓存处理后的数据
+class BookmarkTab {
+  constructor() {
+    this.currentLinks = [];     // 缓存当前显示的链接
+    this.filteredLinks = [];    // 缓存筛选后的链接
+  }
+  
+  loadBookmarkData() {
+    const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
+    
+    // 只在需要时重新处理
+    this.currentLinks = this.filterAndSortLinks(allLinks);
+  }
+}
+
+// ❌ 避免重复获取
+render() {
+  // 错误：每次渲染都获取数据
+  const allLinks = this.stateManager.getStateValue('data.allLinks');
+  this.renderLinks(allLinks);
+}
+```
+
+## 🔍 调试和排查
+
+### 1. 数据流追踪
+```javascript
+// 在各层添加日志追踪数据流
+console.log('📊 [background] 缓存更新:', bookmarksCache);
+console.log('📊 [BookmarkManager] 数据加载:', this.cache);
+console.log('📊 [DataProcessor] 生成链接卡片:', allLinks);
+console.log('📊 [StateManager] 状态更新:', this.state.data);
+console.log('📊 [BookmarkTab] 渲染链接:', this.currentLinks);
+```
+
+### 2. 状态检查
+```javascript
+// 检查StateManager状态
+app.stateManager.printState();
+
+// 检查链接卡片数据
+const allLinks = app.stateManager.getStateValue('data.allLinks');
+console.log(`📊 链接卡片数量: ${allLinks.length}`);
+console.log('📊 链接卡片示例:', allLinks[0]);
+```
+
+### 3. 常见问题排查
+
+#### 问题：链接卡片显示为空
+```javascript
+// 检查数据是否已加载
+if (!app.stateManager.getStateValue('data.allLinks')) {
+  console.warn('⚠️ allLinks 未初始化，可能数据还未加载');
+}
+
+// 检查数据处理流程
+console.log('BookmarkManager cache:', app.bookmarkManager.cache);
+console.log('StateManager data:', app.stateManager.state.data);
+```
+
+#### 问题：数据更新后UI未刷新
+```javascript
+// 检查事件监听
+app.eventBus.emit('data-updated', testData);
+
+// 检查Tab的onDataUpdate方法
+tab.onDataUpdate('bookmark-created', {});
+```
+
+## 📋 检查清单
+
+### 开发新功能时
+- [ ] 是否从 StateManager 获取链接卡片数据？
+- [ ] 是否避免直接调用 BookmarkManager 或 Chrome API？
+- [ ] 是否正确订阅状态变化？
+- [ ] 是否在组件销毁时清理订阅？
+- [ ] 是否遵循只读原则，不修改状态数据？
+
+### Code Review时
+- [ ] 数据获取是否通过 StateManager？
+- [ ] 是否有绕过 StateManager 的数据访问？
+- [ ] 数据更新是否通过正确的流程？
+- [ ] 是否有性能问题（重复获取数据）？
+- [ ] 日志输出是否清晰标识数据流？
+
+## 🚀 实战示例
+
+### 示例1：创建一个新的Tab展示链接卡片
+```javascript
+class MyCustomTab extends BaseTab {
+  constructor() {
+    super('custom', '自定义', '🎨');
+    this.links = [];
+  }
+  
+  async render(container) {
+    // 1. 从StateManager获取所有链接卡片
+    const app = window.linkBoardApp;
+    const allLinks = app.stateManager.getStateValue('data.allLinks') || [];
+    
+    // 2. 根据业务逻辑筛选和处理
+    this.links = allLinks.filter(link => {
+      // 自定义筛选逻辑
+      return link.url.includes('github.com');
+    });
+    
+    // 3. 排序
+    this.links.sort((a, b) => b.dateAdded - a.dateAdded);
+    
+    // 4. 渲染UI
+    this.renderLinks(container);
+    
+    // 5. 订阅数据变化
+    app.stateManager.subscribe(['data.allLinks'], ([newLinks]) => {
+      this.links = newLinks.filter(link => link.url.includes('github.com'));
+      this.renderLinks(container);
+    });
+  }
+  
+  renderLinks(container) {
+    container.innerHTML = '';
+    this.links.forEach(link => {
+      const card = this.createLinkCard(link);
+      container.appendChild(card);
+    });
+  }
+  
+  createLinkCard(link) {
+    // 使用标准的链接卡片字段
+    const card = document.createElement('div');
+    card.innerHTML = `
+      <h3>${link.title}</h3>
+      <a href="${link.url}">${link.url}</a>
+      <span>${new Date(parseInt(link.dateAdded)).toLocaleDateString()}</span>
+    `;
+    return card;
+  }
+}
+```
+
+### 示例2：创建一个筛选组件
+```javascript
+class LinkFilterComponent {
+  constructor(stateManager) {
+    this.stateManager = stateManager;
+    this.filteredLinks = [];
+    this.filterOptions = {
+      keyword: '',
+      dateRange: null
+    };
+  }
+  
+  init() {
+    // 订阅数据变化
+    this.stateManager.subscribe(['data.allLinks'], ([allLinks]) => {
+      this.applyFilter(allLinks);
+    }, { immediate: true });
+  }
+  
+  applyFilter(allLinks) {
+    this.filteredLinks = allLinks.filter(link => {
+      // 按关键词筛选
+      if (this.filterOptions.keyword) {
+        const keyword = this.filterOptions.keyword.toLowerCase();
+        return link.title.toLowerCase().includes(keyword) ||
+               link.url.toLowerCase().includes(keyword);
+      }
+      
+      // 按时间范围筛选
+      if (this.filterOptions.dateRange) {
+        const date = parseInt(link.dateAdded);
+        return date >= this.filterOptions.dateRange.start &&
+               date <= this.filterOptions.dateRange.end;
+      }
+      
+      return true;
+    });
+    
+    // 触发筛选结果更新事件
+    this.emit('filter-updated', this.filteredLinks);
+  }
+  
+  setFilter(options) {
+    this.filterOptions = { ...this.filterOptions, ...options };
+    
+    // 重新应用筛选
+    const allLinks = this.stateManager.getStateValue('data.allLinks') || [];
+    this.applyFilter(allLinks);
+  }
+}
+```
+
+## 🎓 总结
+
+### 核心原则
+1. **单一数据源**: StateManager 是链接卡片数据的唯一来源
+2. **单向数据流**: 数据只能从上层流向下层
+3. **统一处理**: 数据转换由 DataProcessor 统一处理
+4. **只读状态**: UI组件只能读取状态，不能修改
+5. **事件驱动**: 数据更新通过事件通知相关组件
+
+### 数据流路径
+```
+Chrome API → background.js → BookmarkManager → DataProcessor → StateManager → UI
+```
+
+### 工具函数
+
+#### 文件夹工具函数
+**位置**: `js/utils/data-utils.js`
+
+```javascript
+/**
+ * 获取文件夹及其子文件夹的ID
+ * 用于从文件夹映射表中获取指定文件夹及其所有子文件夹的ID列表
+ * 
+ * @param {string} folderId - 文件夹ID
+ * @param {Map} folderMap - 文件夹映射表（从StateManager获取）
+ * @returns {Array} 文件夹ID数组，包含指定文件夹及其所有子文件夹的ID
+ * 
+ * @example
+ * const folderMap = stateManager.getStateValue('data.folderMap');
+ * const folderIds = getFolderAndSubfolderIds('123', folderMap);
+ * // 返回: ['123', '124', '125', ...] (包含所有子文件夹)
+ */
+function getFolderAndSubfolderIds(folderId, folderMap)
+```
+
+**使用示例**:
+```javascript
+// ✅ 正确：在UI组件中使用工具函数
+// js/tabs/bookmark-tab.js:147
+const folderMap = stateManager.getStateValue('data.folderMap') || new Map();
+const folderIds = getFolderAndSubfolderIds(folderId, folderMap);
+
+// ❌ 错误：直接调用DataProcessor（已废弃）
+const folderIds = DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
+```
+
+**注意**: `DataProcessor.getFolderAndSubfolderIds()` 已标记为废弃，保留仅为了向后兼容。新代码应使用工具函数。
+
+### 记住
+- ✅ 从 StateManager 获取 `data.allLinks`
+- ✅ 订阅状态变化自动更新UI
+- ✅ 通过 BookmarkManager 执行收藏夹操作
+- ✅ 使用工具函数 `getFolderAndSubfolderIds()` 处理文件夹ID
+- ❌ 不要直接调用 Chrome API
+- ❌ 不要绕过 StateManager 获取数据
+- ❌ 不要修改从 StateManager 获取的数据
+- ❌ 不要直接调用 DataProcessor（使用工具函数替代）
+- ❌ 不要使用 BookmarkManager 返回原始数据的方法（getAllBookmarks等）

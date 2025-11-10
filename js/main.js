@@ -630,7 +630,7 @@ class ToolboxApp {
    */
   getFolderAndSubfolderIds(folderId) {
     const folderMap = this.stateManager.getStateValue('data.folderMap') || new Map();
-    return DataProcessor.getFolderAndSubfolderIds(folderId, folderMap);
+    return getFolderAndSubfolderIds(folderId, folderMap);
   }
   
   // 文件夹树渲染和右键菜单功能已移至对应的Manager

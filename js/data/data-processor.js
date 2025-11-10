@@ -83,9 +83,9 @@ class DataProcessor {
     }
     
     /**
-     * 生成所有链接数据
+     * 生成所有链接数据（链接卡片）
      * @param {Object} bookmarkCache - 收藏夹缓存数据
-     * @returns {Array} 处理后的链接数组
+     * @returns {Array} 处理后的链接卡片数组
      */
     static generateAllLinks(bookmarkCache) {
       const allBookmarks = bookmarkCache?.flatBookmarks || [];
@@ -98,7 +98,8 @@ class DataProcessor {
         folderId: bookmark.parentId,
         iconUrl: bookmark.iconUrl || DataProcessor.generateFaviconUrl(bookmark.url),
         dateAdded: bookmark.dateAdded,
-        dateGrouped: bookmark.dateGrouped
+        dateGrouped: bookmark.dateGrouped,
+        domain: bookmark.domain || DataProcessor.extractDomain(bookmark.url)
       }));
     }
     
@@ -183,11 +184,14 @@ class DataProcessor {
     
     /**
      * 获取文件夹及其子文件夹的ID
+     * @deprecated 此方法已移至 js/utils/data-utils.js，请使用工具函数 getFolderAndSubfolderIds()
      * @param {string} folderId - 文件夹ID
      * @param {Map} folderMap - 文件夹映射表
      * @returns {Array} 文件夹ID数组
      */
     static getFolderAndSubfolderIds(folderId, folderMap) {
+      // 为了向后兼容，保留此方法，但建议使用工具函数
+      console.warn('⚠️ DataProcessor.getFolderAndSubfolderIds() 已废弃，请使用工具函数 getFolderAndSubfolderIds()');
       const ids = [folderId];
       
       function collectChildIds(node) {
@@ -248,6 +252,20 @@ class DataProcessor {
         return `https://${domain}/favicon.ico`;
       } catch (e) {
         return '';
+      }
+    }
+    
+    /**
+     * 从URL提取域名
+     * @param {string} url - 网站URL
+     * @returns {string} 域名（去除www前缀）
+     */
+    static extractDomain(url) {
+      try {
+        const hostname = new URL(url).hostname;
+        return hostname.replace(/^www\./i, '');
+      } catch (e) {
+        return 'unknown';
       }
     }
   }

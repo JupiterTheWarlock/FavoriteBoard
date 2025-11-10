@@ -300,14 +300,35 @@ class StateManager {
   
   /**
    * 处理数据更新事件
+   * 注意：此方法不应直接更新状态，因为数据应该已经通过 processBookmarksData() 统一处理
+   * 此方法主要用于验证数据一致性或触发其他副作用
+   * 
    * @param {Object} data - 数据更新信息
    */
   handleDataUpdate(data) {
-    this.setDataState({
-      folderTree: data.data.folderTree,
-      allLinks: data.data.allLinks,
-      folderMap: data.data.folderMap
-    }, 'event-bus');
+    // 数据应该已经通过 processBookmarksData() 更新了状态
+    // 这里只做验证，不重复更新状态
+    const currentFolderTree = this.getStateValue('data.folderTree');
+    const currentAllLinks = this.getStateValue('data.allLinks');
+    const currentFolderMap = this.getStateValue('data.folderMap');
+    
+    // 验证数据一致性（仅在开发模式下）
+    if (this.state.config.debugMode) {
+      const incomingFolderTree = data.data?.folderTree;
+      const incomingAllLinks = data.data?.allLinks;
+      const incomingFolderMap = data.data?.folderMap;
+      
+      if (incomingFolderTree && incomingFolderTree.length !== currentFolderTree.length) {
+        console.warn('⚠️ [StateManager] 文件夹树数据不一致，可能需要重新处理');
+      }
+      
+      if (incomingAllLinks && incomingAllLinks.length !== currentAllLinks.length) {
+        console.warn('⚠️ [StateManager] 链接数据不一致，可能需要重新处理');
+      }
+    }
+    
+    // 数据更新事件主要用于通知其他组件，状态已经在 processBookmarksData() 中更新
+    console.log('📊 [StateManager] 数据更新事件已接收，状态已通过 processBookmarksData() 更新');
   }
   
   /**

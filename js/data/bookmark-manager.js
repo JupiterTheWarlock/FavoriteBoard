@@ -105,7 +105,24 @@ class BookmarkManager {
     return Date.now() - this.lastSync < cacheTimeout;
   }
   
-  // 获取收藏夹文件夹树
+  /**
+   * 获取收藏夹文件夹树（原始数据）
+   * 
+   * ⚠️ 警告：此方法返回原始文件夹树数据，不应被UI组件直接使用
+   * 
+   * UI组件应该通过 StateManager 获取处理后的文件夹树：
+   * ```javascript
+   * // ❌ 错误方式
+   * const folderTree = bookmarkManager.getFolderTree();
+   * 
+   * // ✅ 正确方式
+   * const folderTree = stateManager.getStateValue('data.folderTree') || [];
+   * ```
+   * 
+   * 此方法仅用于内部数据处理或调试目的
+   * 
+   * @returns {Array} 原始文件夹树数据
+   */
   getFolderTree() {
     if (!this.cache || !this.cache.tree) return [];
     
@@ -143,20 +160,78 @@ class BookmarkManager {
     };
   }
   
-  // 获取文件夹内的收藏夹
+  /**
+   * 获取文件夹内的收藏夹（原始数据）
+   * 
+   * ⚠️ 警告：此方法返回原始书签数据，不应被UI组件直接使用
+   * 
+   * UI组件应该通过 StateManager 获取处理后的链接卡片数据：
+   * ```javascript
+   * // ❌ 错误方式
+   * const bookmarks = bookmarkManager.getBookmarksInFolder(folderId);
+   * 
+   * // ✅ 正确方式
+   * const allLinks = stateManager.getStateValue('data.allLinks') || [];
+   * const folderLinks = allLinks.filter(link => link.folderId === folderId);
+   * ```
+   * 
+   * 此方法仅用于内部数据处理或调试目的
+   * 
+   * @param {string} folderId - 文件夹ID
+   * @returns {Array} 原始书签数据数组
+   */
   getBookmarksInFolder(folderId) {
     if (!this.cache) return [];
     
     return this.cache.flatBookmarks.filter(bookmark => bookmark.parentId === folderId);
   }
   
-  // 获取所有收藏夹
+  /**
+   * 获取所有收藏夹（原始数据）
+   * 
+   * ⚠️ 警告：此方法返回原始书签数据，不应被UI组件直接使用
+   * 
+   * UI组件应该通过 StateManager 获取处理后的链接卡片数据：
+   * ```javascript
+   * // ❌ 错误方式
+   * const bookmarks = bookmarkManager.getAllBookmarks();
+   * 
+   * // ✅ 正确方式
+   * const allLinks = stateManager.getStateValue('data.allLinks') || [];
+   * ```
+   * 
+   * 此方法仅用于内部数据处理或调试目的
+   * 
+   * @returns {Array} 原始书签数据数组
+   */
   getAllBookmarks() {
     if (!this.cache) return [];
     return this.cache.flatBookmarks;
   }
   
-  // 搜索收藏夹
+  /**
+   * 搜索收藏夹（原始数据）
+   * 
+   * ⚠️ 警告：此方法返回原始书签数据，不应被UI组件直接使用
+   * 
+   * UI组件应该从 StateManager 获取链接卡片数据后进行本地搜索：
+   * ```javascript
+   * // ❌ 错误方式
+   * const results = bookmarkManager.searchBookmarks(query);
+   * 
+   * // ✅ 正确方式
+   * const allLinks = stateManager.getStateValue('data.allLinks') || [];
+   * const results = allLinks.filter(link => 
+   *   link.title.toLowerCase().includes(query) ||
+   *   link.url.toLowerCase().includes(query)
+   * );
+   * ```
+   * 
+   * 此方法仅用于内部数据处理或调试目的
+   * 
+   * @param {string} query - 搜索查询
+   * @returns {Array} 匹配的原始书签数据数组
+   */
   searchBookmarks(query) {
     if (!this.cache || !query.trim()) return [];
     

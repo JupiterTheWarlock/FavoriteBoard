@@ -14,6 +14,45 @@ function isValidUrl(string) {
     }
 }
 
+/**
+ * 获取文件夹及其子文件夹的ID
+ * 用于从文件夹映射表中获取指定文件夹及其所有子文件夹的ID列表
+ * 
+ * @param {string} folderId - 文件夹ID
+ * @param {Map} folderMap - 文件夹映射表（从StateManager获取）
+ * @returns {Array} 文件夹ID数组，包含指定文件夹及其所有子文件夹的ID
+ * 
+ * @example
+ * const folderMap = stateManager.getStateValue('data.folderMap');
+ * const folderIds = getFolderAndSubfolderIds('123', folderMap);
+ * // 返回: ['123', '124', '125', ...] (包含所有子文件夹)
+ */
+function getFolderAndSubfolderIds(folderId, folderMap) {
+  if (!folderId || !folderMap) {
+    return [folderId].filter(Boolean);
+  }
+  
+  const ids = [folderId];
+  
+  function collectChildIds(node) {
+    if (node && node.children && Array.isArray(node.children)) {
+      node.children.forEach(child => {
+        if (child && child.id) {
+          ids.push(child.id);
+          collectChildIds(child);
+        }
+      });
+    }
+  }
+  
+  const folder = folderMap.get(folderId);
+  if (folder) {
+    collectChildIds(folder);
+  }
+  
+  return ids;
+}
+
 // 已删除未使用的函数: formatUrl, generateId, formatNumber
 
 /**
