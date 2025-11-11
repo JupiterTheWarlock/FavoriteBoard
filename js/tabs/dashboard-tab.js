@@ -215,7 +215,7 @@ class DashboardTab extends BaseTab {
            data-url="${activity.link?.url || ''}"
            title="左键点击打开链接，右键显示更多选项">
         <div class="activity-icon">
-          <img class="activity-icon-img" src="${activity.icon}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon()}">
+          <img class="activity-icon-img" src="${activity.icon}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon(activity.link?.title, activity.link?.url)}">
         </div>
         <div class="activity-content">
           <div class="activity-title">${escapeHtml(activity.title)}</div>
@@ -301,7 +301,7 @@ class DashboardTab extends BaseTab {
         // 绑定图标错误处理（统一流程）
         const iconImg = card.querySelector('.activity-icon-img');
         if (iconImg && url) {
-          setupIconErrorHandling(iconImg, url);
+          setupIconErrorHandling(iconImg, url, linkData.title);
         }
       }
     });

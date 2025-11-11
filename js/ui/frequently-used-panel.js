@@ -150,7 +150,7 @@ class FrequentlyUsedPanel {
              src="${getSafeIcon(website.icon, website.url)}" 
              alt="icon" 
              loading="lazy"
-             data-fallback="${getDefaultIcon()}">
+             data-fallback="${getDefaultIcon(website.title, website.url)}">
         <button class="remove-btn" title="移除常用网页">×</button>
       </div>
     `).join('');
@@ -281,7 +281,7 @@ class FrequentlyUsedPanel {
     // 图标加载错误处理（统一流程）
     const iconImg = button.querySelector('.website-icon');
     if (iconImg && url) {
-      setupIconErrorHandling(iconImg, url);
+      setupIconErrorHandling(iconImg, url, title);
     }
   }
   

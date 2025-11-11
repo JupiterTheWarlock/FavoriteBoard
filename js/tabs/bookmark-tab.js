@@ -226,7 +226,7 @@ class BookmarkTab extends BaseTab {
     
     card.innerHTML = `
       <div class="card-header">
-        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon()}">
+        <img class="card-icon" src="${iconUrl}" alt="icon" loading="lazy" data-fallback="${getDefaultIcon(link.title, link.url)}">
         <h3 class="card-title" title="${escapeHtml(link.title)}">${escapeHtml(link.title)}</h3>
         <button class="context-menu-btn" title="更多选项">⋮</button>
       </div>
@@ -243,7 +243,7 @@ class BookmarkTab extends BaseTab {
     // 绑定图标错误处理（统一流程）
     const iconImg = card.querySelector('.card-icon');
     if (iconImg && link.url) {
-      setupIconErrorHandling(iconImg, link.url);
+      setupIconErrorHandling(iconImg, link.url, link.title);
     }
     
     return card;
