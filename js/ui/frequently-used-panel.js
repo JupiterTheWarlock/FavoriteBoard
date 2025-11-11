@@ -278,64 +278,11 @@ class FrequentlyUsedPanel {
       });
     }
     
-    // 图标加载错误处理
+    // 图标加载错误处理（统一流程）
     const iconImg = button.querySelector('.website-icon');
-    if (iconImg) {
-      this.setupIconErrorHandling(iconImg, url);
+    if (iconImg && url) {
+      setupIconErrorHandling(iconImg, url);
     }
-  }
-  
-  /**
-   * 设置图标错误处理
-   * @param {HTMLImageElement} iconImg - 图标元素
-   * @param {string} url - 网页URL
-   */
-  setupIconErrorHandling(iconImg, url) {
-    let fallbackAttempts = 0;
-    
-    iconImg.addEventListener('error', () => {
-      fallbackAttempts++;
-      
-      if (fallbackAttempts === 1) {
-        // 首先尝试标准的 domain/favicon.ico 路径
-        try {
-          const domain = new URL(url).hostname;
-          iconImg.src = `https://${domain}/favicon.ico`;
-          console.log('🔍 尝试标准favicon路径:', `https://${domain}/favicon.ico`);
-          return;
-        } catch (e) {
-          console.warn('⚠️ 无法解析URL生成标准favicon路径:', url);
-        }
-      }
-      
-      if (fallbackAttempts === 2) {
-        // 备选方案1：尝试Google favicon服务
-        try {
-          const domain = new URL(url).hostname;
-          iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-          return;
-        } catch (e) {
-          console.warn('⚠️ 无法解析URL生成Google favicon:', url);
-        }
-      }
-      
-      if (fallbackAttempts === 3) {
-        // 备选方案2：尝试DuckDuckGo favicon服务
-        try {
-          const domain = new URL(url).hostname;
-          iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
-          return;
-        } catch (e) {
-          console.warn('⚠️ 无法解析URL生成DuckDuckGo favicon:', url);
-        }
-      }
-      
-      // 使用默认图标
-      const fallbackUrl = iconImg.dataset.fallback;
-      if (fallbackUrl && iconImg.src !== fallbackUrl) {
-        iconImg.src = fallbackUrl;
-      }
-    });
   }
   
   // ==================== 事件处理方法 ====================

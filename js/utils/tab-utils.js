@@ -31,7 +31,7 @@ function getDefaultIcon() {
 }
 
 /**
- * 获取安全的图标URL
+ * 获取安全的图标URL（同步版本，用于初始渲染）
  * @param {string} iconUrl - 原始图标URL
  * @param {string} websiteUrl - 网站URL
  * @returns {string}
@@ -51,6 +51,72 @@ function getSafeIcon(iconUrl, websiteUrl = null) {
   }
   
   return getDefaultIcon();
+}
+
+/**
+ * 获取图标URL（带缓存，异步版本）
+ * 通过 BookmarkManager 的统一缓存机制获取 favicon
+ * @param {string} iconUrl - 原始图标URL（如果已有）
+ * @param {string} websiteUrl - 网站URL（用于fallback）
+ * @returns {Promise<string>} 图标URL
+ */
+async function getIconWithCache(iconUrl, websiteUrl = null) {
+  // 如果已有有效的iconUrl，直接返回
+  if (iconUrl && isValidIconUrl(iconUrl)) {
+    return iconUrl;
+  }
+  
+  // 如果没有websiteUrl，返回默认图标
+  if (!websiteUrl) {
+    return getDefaultIcon();
+  }
+  
+  // 通过BookmarkManager获取favicon（带缓存）
+  try {
+    const app = window.linkBoardApp;
+    if (app && app.bookmarkManager) {
+      const favicon = await app.bookmarkManager.getFavicon(websiteUrl);
+      return favicon || getDefaultIcon();
+    }
+  } catch (error) {
+    console.warn('获取favicon失败，使用默认图标:', error);
+  }
+  
+  return getDefaultIcon();
+}
+
+/**
+ * 设置图标错误处理（统一流程）
+ * 当图标加载失败时，通过统一的缓存机制获取fallback
+ * @param {HTMLImageElement} iconImg - 图标img元素
+ * @param {string} url - 网站URL
+ */
+function setupIconErrorHandling(iconImg, url) {
+  let fallbackAttempts = 0;
+  
+  iconImg.addEventListener('error', async () => {
+    fallbackAttempts++;
+    
+    // 通过统一流程获取fallback
+    try {
+      const app = window.linkBoardApp;
+      if (app && app.bookmarkManager) {
+        const favicon = await app.bookmarkManager.getFavicon(url);
+        if (favicon && iconImg.src !== favicon) {
+          iconImg.src = favicon;
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn('获取fallback favicon失败:', error);
+    }
+    
+    // 最终fallback：使用默认图标
+    const fallbackUrl = iconImg.dataset.fallback;
+    if (fallbackUrl && iconImg.src !== fallbackUrl) {
+      iconImg.src = fallbackUrl;
+    }
+  });
 }
 
 /**
@@ -186,6 +252,8 @@ function createEmptyState(message, icon = '📭') {
 window.isValidIconUrl = isValidIconUrl;
 window.getDefaultIcon = getDefaultIcon;
 window.getSafeIcon = getSafeIcon;
+window.getIconWithCache = getIconWithCache;
+window.setupIconErrorHandling = setupIconErrorHandling;
 window.getFolderIcon = getFolderIcon;
 window.escapeHtml = escapeHtml;
 window.getDomainFromUrl = getDomainFromUrl;
@@ -197,6 +265,8 @@ window.TabUtils = {
   isValidIconUrl,
   getDefaultIcon,
   getSafeIcon,
+  getIconWithCache,
+  setupIconErrorHandling,
   getFolderIcon,
   escapeHtml,
   getDomainFromUrl,

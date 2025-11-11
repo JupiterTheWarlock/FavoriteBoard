@@ -154,30 +154,10 @@ class SearchResultsPanel {
       });
     }
 
+    // 绑定图标错误处理（统一流程）
     const iconImg = card.querySelector('.card-icon');
-    if (iconImg) {
-      let fallbackAttempts = 0;
-      iconImg.addEventListener('error', () => {
-        fallbackAttempts++;
-        if (fallbackAttempts === 1 && link.url) {
-          try {
-            const domain = new URL(link.url).hostname;
-            iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-            return;
-          } catch {}
-        }
-        if (fallbackAttempts === 2 && link.url) {
-          try {
-            const domain = new URL(link.url).hostname;
-            iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
-            return;
-          } catch {}
-        }
-        const fallbackUrl = iconImg.dataset.fallback;
-        if (fallbackUrl && iconImg.src !== fallbackUrl) {
-          iconImg.src = fallbackUrl;
-        }
-      });
+    if (iconImg && link.url) {
+      setupIconErrorHandling(iconImg, link.url);
     }
 
     return card;

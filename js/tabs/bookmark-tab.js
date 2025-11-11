@@ -240,45 +240,10 @@ class BookmarkTab extends BaseTab {
     // 绑定卡片事件
     this.bindCardEvents(card, link);
     
-    // 绑定图标错误处理
+    // 绑定图标错误处理（统一流程）
     const iconImg = card.querySelector('.card-icon');
-    if (iconImg) {
-      let fallbackAttempts = 0;
-      iconImg.addEventListener('error', () => {
-        fallbackAttempts++;
-        
-        if (fallbackAttempts === 1) {
-          // 第一次失败：尝试使用Google favicon服务
-          if (link.url) {
-            try {
-              const domain = new URL(link.url).hostname;
-              iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-              return;
-            } catch (e) {
-              // URL解析失败，继续下一个备用方案
-            }
-          }
-        }
-        
-        if (fallbackAttempts === 2) {
-          // 第二次失败：尝试使用DuckDuckGo favicon服务
-          if (link.url) {
-            try {
-              const domain = new URL(link.url).hostname;
-              iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
-              return;
-            } catch (e) {
-              // URL解析失败，继续下一个备用方案
-            }
-          }
-        }
-        
-        // 最终备用方案：使用默认图标
-        const fallbackUrl = iconImg.dataset.fallback;
-        if (fallbackUrl && iconImg.src !== fallbackUrl) {
-          iconImg.src = fallbackUrl;
-        }
-      });
+    if (iconImg && link.url) {
+      setupIconErrorHandling(iconImg, link.url);
     }
     
     return card;

@@ -298,34 +298,10 @@ class DashboardTab extends BaseTab {
             });
           });
         }
+        // 绑定图标错误处理（统一流程）
         const iconImg = card.querySelector('.activity-icon-img');
-        if (iconImg) {
-          let fallbackAttempts = 0;
-          iconImg.addEventListener('error', () => {
-            fallbackAttempts++;
-            if (fallbackAttempts === 1) {
-              if (url) {
-                try {
-                  const domain = new URL(url).hostname;
-                  iconImg.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-                  return;
-                } catch (e) {}
-              }
-            }
-            if (fallbackAttempts === 2) {
-              if (url) {
-                try {
-                  const domain = new URL(url).hostname;
-                  iconImg.src = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
-                  return;
-                } catch (e) {}
-              }
-            }
-            const fallbackUrl = iconImg.dataset.fallback;
-            if (fallbackUrl && iconImg.src !== fallbackUrl) {
-              iconImg.src = fallbackUrl;
-            }
-          });
+        if (iconImg && url) {
+          setupIconErrorHandling(iconImg, url);
         }
       }
     });
