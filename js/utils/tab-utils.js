@@ -174,7 +174,7 @@ async function getLetterIconWithCache(title, url) {
       return cached[cacheKey];
     }
   } catch (error) {
-    console.warn('读取首字母icon缓存失败:', error);
+    console.log('[favicon]读取首字母icon缓存失败:', error);
   }
   
   // 生成icon
@@ -184,7 +184,7 @@ async function getLetterIconWithCache(title, url) {
   try {
     await chrome.storage.local.set({ [cacheKey]: iconDataUri });
   } catch (error) {
-    console.warn('保存首字母icon缓存失败:', error);
+    console.log('[favicon]保存首字母icon缓存失败:', error);
   }
   
   return iconDataUri;
@@ -223,7 +223,7 @@ function getSafeIcon(iconUrl, websiteUrl = null) {
       const domain = new URL(websiteUrl).hostname;
       return `https://${domain}/favicon.ico`;
     } catch (e) {
-      console.warn('无法解析网站URL生成favicon:', websiteUrl);
+      console.log('[favicon]无法解析网站URL生成favicon:', websiteUrl);
     }
   }
   
@@ -256,7 +256,7 @@ async function getIconWithCache(iconUrl, websiteUrl = null) {
       return favicon || getDefaultIcon();
     }
   } catch (error) {
-    console.warn('获取favicon失败，使用默认图标:', error);
+    console.log('[favicon]获取favicon失败，使用默认图标:');
   }
   
   return getDefaultIcon();
@@ -264,51 +264,188 @@ async function getIconWithCache(iconUrl, websiteUrl = null) {
 
 /**
  * 设置图标错误处理（统一流程）
- * 当图标加载失败时，通过统一的缓存机制获取fallback
+ * 当图标加载失败时，按照以下顺序尝试fallback：
+ * 1. 标准路径: https://${domain}/favicon.ico
+ * 2. DuckDuckGo服务: https://external-content.duckduckgo.com/ip3/${domain}.ico
+ * 3. 首字母icon: 使用标题或URL生成首字母图标（兜底方案）
+ * 4. 默认图标: 使用data-fallback属性中的默认图标
+ * 
+ * 每次尝试如果超过5秒无响应，会自动跳到下一次尝试
  * @param {HTMLImageElement} iconImg - 图标img元素
  * @param {string} url - 网站URL
- * @param {string} title - 标题（可选，用于生成首字母icon）
+ * @param {string} title - 标题（可选，用于生成首字母icon作为兜底）
  */
 function setupIconErrorHandling(iconImg, url, title = null) {
-  let fallbackAttempts = 0;
+  let timeoutId = null;
+  let isSuccess = false;
+  let currentAttempt = 0; // 当前尝试次数
+  const timedOutAttempts = new Set(); // 记录所有已超时的尝试编号
+  const TIMEOUT_MS = 1000; // 1秒超时
   
-  iconImg.addEventListener('error', async () => {
-    fallbackAttempts++;
-    
-    // 通过统一流程获取fallback
-    try {
-      const app = window.linkBoardApp;
-      if (app && app.bookmarkManager) {
-        const favicon = await app.bookmarkManager.getFavicon(url);
-        if (favicon && iconImg.src !== favicon) {
-          iconImg.src = favicon;
-          return;
-        }
-      }
-    } catch (error) {
-      console.warn('获取fallback favicon失败:', error);
+  console.log('[favicon]初始化图标错误处理，URL:', url, '标题:', title);
+  
+  // 清除timeout
+  const clearTimeoutHandler = () => {
+    if (timeoutId !== null) {
+      console.log('[favicon]清除timeout');
+      window.clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+  
+  // 尝试下一个fallback
+  const tryNextFallback = async (attemptNumber) => {
+    if (isSuccess) {
+      console.log('[favicon]已经成功，停止尝试');
+      return;
     }
     
-    // 最终fallback：优先使用首字母icon，否则使用默认图标
-    try {
-      // 尝试使用首字母icon
-      if (title || url) {
-        const letterIcon = await getLetterIconWithCache(title, url);
-        if (letterIcon && iconImg.src !== letterIcon) {
-          iconImg.src = letterIcon;
+    currentAttempt = attemptNumber;
+    console.log(`[favicon]尝试 ${attemptNumber}`);
+    
+    if (attemptNumber === 1) {
+      // 第1次：尝试标准的 domain/favicon.ico 路径
+      if (url) {
+        try {
+          const domain = new URL(url).hostname;
+          const newSrc = `https://${domain}/favicon.ico`;
+          console.log('[favicon]设置src为:', newSrc, url);
+          iconImg.src = newSrc;
+          startTimeout(attemptNumber);
           return;
+        } catch (e) {
+          console.log('[favicon]无法解析URL:', url);
         }
       }
-    } catch (error) {
-      console.warn('获取首字母icon失败:', error);
+      // 如果URL解析失败，直接尝试下一个
+      tryNextFallback(attemptNumber + 1);
+      return;
     }
     
-    // 最后的fallback：使用data-fallback属性中的默认图标
+    if (attemptNumber === 2) {
+      // 第2次：尝试DuckDuckGo favicon服务
+      if (url) {
+        try {
+          const domain = new URL(url).hostname;
+          const newSrc = `https://external-content.duckduckgo.com/ip3/${domain}.ico`;
+          console.log('[favicon]设置src为:', newSrc, url);
+          iconImg.src = newSrc;
+          startTimeout(attemptNumber);
+          return;
+        } catch (e) {
+          console.log('[favicon]无法解析URL:', url);
+        }
+      }
+      // 如果URL解析失败，直接尝试下一个
+      tryNextFallback(attemptNumber + 1);
+      return;
+    }
+    
+    if (attemptNumber === 3) {
+      // 第3次：尝试使用首字母icon
+      try {
+        if (title || url) {
+          console.log('[favicon]生成首字母icon', url);
+          const letterIcon = await getLetterIconWithCache(title, url);
+          if (letterIcon) {
+            console.log('[favicon]设置src为:', letterIcon, url);
+            iconImg.src = letterIcon;
+            startTimeout(attemptNumber);
+            return;
+          }
+        }
+      } catch (error) {
+        console.log('[favicon]获取首字母icon失败:', error);
+      }
+      // 如果失败，尝试下一个
+      tryNextFallback(attemptNumber + 1);
+      return;
+    }
+    
+    // 最终fallback：使用默认图标
+    console.log('[favicon]使用默认图标', url);
     const fallbackUrl = iconImg.dataset.fallback;
-    if (fallbackUrl && iconImg.src !== fallbackUrl) {
+    if (fallbackUrl) {
+      console.log('[favicon]设置src为:', fallbackUrl, url);
+      clearTimeoutHandler();
       iconImg.src = fallbackUrl;
+    } else {
+      console.log('[favicon]没有默认图标可用');
     }
-  });
+  };
+  
+  // 启动timeout
+  const startTimeout = (attemptNumber) => {
+    clearTimeoutHandler();
+    console.log(`[favicon]启动 ${TIMEOUT_MS}ms timeout`, url);
+    timeoutId = window.setTimeout(() => {
+      console.log(`[favicon]尝试 ${attemptNumber} 超时，跳到下一次`, url);
+      timeoutId = null;
+      // 记录这个尝试已超时
+      timedOutAttempts.add(attemptNumber);
+      console.log(`[favicon]已超时的尝试:`, Array.from(timedOutAttempts), url);
+      // 跳到下一步
+      if (!isSuccess && currentAttempt === attemptNumber) {
+        tryNextFallback(attemptNumber + 1);
+      }
+    }, TIMEOUT_MS);
+  };
+  
+  // 监听load事件，成功时清除timeout
+  iconImg.addEventListener('load', () => {
+    const loadSrc = iconImg.src;
+    console.log('[favicon]图标加载成功:', loadSrc, url);
+    
+    // 检查这个load属于哪个尝试
+    let loadAttempt = 0;
+    if (url) {
+      try {
+        const domain = new URL(url).hostname;
+        if (loadSrc.includes(`${domain}/favicon.ico`)) {
+          loadAttempt = 1;
+        } else if (loadSrc.includes('duckduckgo.com')) {
+          loadAttempt = 2;
+        } else if (loadSrc.startsWith('data:')) {
+          loadAttempt = 3;
+        }
+      } catch (e) {
+        // 忽略
+      }
+    }
+    
+    console.log(`[favicon]load事件来自尝试 ${loadAttempt}`, url);
+    
+    // 如果这个尝试已超时，忽略这个load
+    if (timedOutAttempts.has(loadAttempt)) {
+      console.log(`[favicon]尝试 ${loadAttempt} 已超时，忽略load事件`, url);
+      return;
+    }
+    
+    // 正常情况：load成功
+    clearTimeoutHandler();
+    console.log('[favicon]图标加载成功，停止尝试', url);
+    isSuccess = true;
+  }, { once: false });
+  
+  // 监听error事件，失败时尝试下一个
+  iconImg.addEventListener('error', () => {
+    console.log('[favicon]图标加载失败，当前尝试:', currentAttempt, url);
+    
+    // 如果这个尝试已超时，忽略这个error
+    if (timedOutAttempts.has(currentAttempt)) {
+      console.log(`[favicon]尝试 ${currentAttempt} 已超时，忽略error事件`, url);
+      return;
+    }
+    
+    // 正常情况：error，跳到下一步
+    clearTimeoutHandler();
+    if (!isSuccess) {
+      tryNextFallback(currentAttempt + 1);
+    }
+  }, { once: false });
+  
+  // 初始尝试
+  tryNextFallback(1);
 }
 
 /**
