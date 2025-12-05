@@ -294,8 +294,56 @@ function notifyTabsOfUpdate(action, data) {
 // 监听来自内容脚本的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Received message:', message.action);
+  
+  // 创建一个异步处理器
+  const handleAsync = async () => {
+    switch (message.action) {
+      case 'getBookmarksCache':
+        return await handleGetBookmarksCache();
+        
+      case 'getFavicon':
+        return await handleGetFavicon(message.url);
+        
+      case 'refreshCache':
+        return await handleRefreshCache();
+        
+      case 'deleteBookmark':
+        return await handleDeleteBookmark(message.bookmarkId);
+        
+      case 'moveBookmark':
+        return await handleMoveBookmark(message.bookmarkId, message.targetFolderId);
+        
+      case 'createFolder':
+        return await handleCreateFolder(message.parentId, message.title);
+        
+      case 'renameFolder':
+        return await handleRenameFolder(message.folderId, message.title);
+        
+      case 'deleteFolder':
+        return await handleDeleteFolder(message.folderId);
+        
+      default:
+        console.warn('⚠️ Unknown message action:', message.action);
+        return { success: false, error: 'Unknown action' };
+    }
+  };
+  
+  // 执行异步处理器并发送响应
+  handleAsync()
+    .then(response => {
+      sendResponse(response);
+    })
+    .catch(error => {
+      console.error('❌ Error handling message:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+  
+  // 返回true保持消息端口开放
+  return true;
+});
 
-  // 处理打开主页面的特殊请求
+// 监听内容脚本请求打开主页面（与扩展按钮点击行为一致）
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'openMainPage') {
     (async () => {
       const hash = message.hash || '';
@@ -314,57 +362,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.tabs.create({ url });
       }
     })();
-    return true; // 保持消息端口开放
   }
-
-  // 创建一个异步处理器处理其他消息
-  const handleAsync = async () => {
-    switch (message.action) {
-      case 'getBookmarksCache':
-        return await handleGetBookmarksCache();
-
-      case 'getFavicon':
-        return await handleGetFavicon(message.url);
-
-      case 'refreshCache':
-        return await handleRefreshCache();
-
-      case 'deleteBookmark':
-        return await handleDeleteBookmark(message.bookmarkId);
-
-      case 'moveBookmark':
-        return await handleMoveBookmark(message.bookmarkId, message.targetFolderId);
-
-      case 'createFolder':
-        return await handleCreateFolder(message.parentId, message.title);
-
-      case 'renameFolder':
-        return await handleRenameFolder(message.folderId, message.title);
-
-      case 'deleteFolder':
-        return await handleDeleteFolder(message.folderId);
-
-      case 'importBookmarks':
-        return await handleImportBookmarks(message.data);
-
-      default:
-        console.warn('⚠️ Unknown message action:', message.action);
-        return { success: false, error: 'Unknown action' };
-    }
-  };
-
-  // 执行异步处理器并发送响应
-  handleAsync()
-    .then(response => {
-      sendResponse(response);
-    })
-    .catch(error => {
-      console.error('❌ Error handling message:', error);
-      sendResponse({ success: false, error: error.message });
-    });
-
-  // 返回true保持消息端口开放
-  return true;
 });
 
 // 获取收藏夹缓存
@@ -666,384 +664,6 @@ async function handleDeleteFolder(folderId) {
       error: error.message,
       folderId: folderId
     };
-  }
-}
-
-// 处理导入收藏夹数据（覆盖模式）
-async function handleImportBookmarks(importData) {
-  try {
-    console.log('🔄 开始导入收藏夹数据（覆盖模式）...');
-
-    if (!importData) {
-      throw new Error('导入数据不能为空');
-    }
-
-    const { folderTree = [], allLinks = [] } = importData;
-
-    if (!Array.isArray(folderTree) || !Array.isArray(allLinks)) {
-      throw new Error('数据格式错误：folderTree和allLinks必须是数组');
-    }
-
-    let totalCreated = 0;
-    let totalDeleted = 0;
-    let errors = [];
-
-    console.log(`📊 准备导入 ${folderTree.length} 个文件夹和 ${allLinks.length} 个书签`);
-
-    // 获取现有的根文件夹（书签栏和其他书签）
-    const [bookmarkBar] = await chrome.bookmarks.get('1'); // 书签栏
-    const [otherBookmarks] = await chrome.bookmarks.get('2'); // 其他书签
-
-    // 第一阶段：清空现有的收藏夹（除了根文件夹）
-    console.log('🗑️ 清空现有收藏夹...');
-    const beforeCount = await countAllBookmarks();
-    await clearAllBookmarksExceptRoot();
-    totalDeleted = beforeCount;
-    console.log(`✅ 清空完成，删除了 ${totalDeleted} 个书签`);
-
-    // 第二阶段：创建新的文件夹结构（基于路径匹配）
-    const folderPathMap = new Map(); // 路径 -> 文件夹ID的映射
-    console.log('🔍 DEBUG: 原始folderTree数据:', JSON.stringify(folderTree, null, 2));
-    console.log('🔍 DEBUG: 开始创建文件夹结构...');
-    await createFolderStructureBasedOnPaths(folderTree, folderPathMap, bookmarkBar.id, otherBookmarks.id);
-    console.log('🔍 DEBUG: 文件夹映射表创建完成:', Array.from(folderPathMap.entries()));
-
-    // 第三阶段：创建书签（基于路径匹配，带去重检查）
-    for (const bookmark of allLinks) {
-      try {
-        const folderPath = bookmark.path || '其他';
-        const targetFolderId = folderPathMap.get(folderPath) || otherBookmarks.id;
-        console.log(`🔍 DEBUG: 书签 ${bookmark.title} - 路径: ${folderPath} - 目标文件夹ID: ${targetFolderId}`);
-
-        // 检查书签是否已存在
-        const existingBookmark = await findBookmarkByUrlAndFolder(targetFolderId, bookmark.url);
-        if (existingBookmark) {
-          console.log(`⚠️ 书签已存在，跳过: ${bookmark.title} -> ${bookmark.url}`);
-          continue;
-        }
-
-        const newBookmark = await chrome.bookmarks.create({
-          parentId: targetFolderId,
-          title: bookmark.title || '未命名书签',
-          url: bookmark.url
-        });
-
-        totalCreated++;
-        console.log(`✅ 创建书签: ${bookmark.title} -> 路径: ${folderPath}`);
-      } catch (error) {
-        console.error(`❌ 创建书签失败: ${bookmark.title}`, error);
-        errors.push(`书签"${bookmark.title}"创建失败: ${error.message}`);
-      }
-    }
-
-    // 刷新缓存
-    await refreshBookmarksCache();
-
-    const result = {
-      success: true,
-      summary: {
-        totalFolders: folderTree.length,
-        totalBookmarks: allLinks.length,
-        createdBookmarks: totalCreated,
-        deletedBookmarks: totalDeleted,
-        errors: errors.length
-      },
-      errors: errors
-    };
-
-    console.log(`✅ 导入完成！删除 ${totalDeleted} 个，创建 ${totalCreated} 个书签，${errors.length} 个错误`);
-
-    return result;
-
-  } catch (error) {
-    console.error('❌ 导入收藏夹数据失败:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
-// 清空所有收藏夹（除了根文件夹）
-async function clearAllBookmarksExceptRoot() {
-  try {
-    // 获取完整的书签树
-    const tree = await chrome.bookmarks.getTree();
-
-    // 找到书签栏（ID: 1）和其他书签（ID: 2）
-    const bookmarkBar = tree[0].children[0]; // 书签栏
-    const otherBookmarks = tree[0].children[1]; // 其他书签
-
-    console.log('🗑️ 开始清空收藏夹...');
-    console.log(`📂 书签栏有 ${bookmarkBar.children?.length || 0} 个子项`);
-    console.log(`📂 其他书签有 ${otherBookmarks.children?.length || 0} 个子项`);
-
-    // 递归删除书签栏的所有子项
-    if (bookmarkBar.children && bookmarkBar.children.length > 0) {
-      for (const child of bookmarkBar.children) {
-        await chrome.bookmarks.removeTree(child.id);
-        console.log(`  - 删除书签栏子项: ${child.title || child.id}`);
-      }
-    }
-
-    // 递归删除其他书签的所有子项
-    if (otherBookmarks.children && otherBookmarks.children.length > 0) {
-      for (const child of otherBookmarks.children) {
-        await chrome.bookmarks.removeTree(child.id);
-        console.log(`  - 删除其他书签子项: ${child.title || child.id}`);
-      }
-    }
-
-    console.log('✅ 已清空所有收藏夹');
-  } catch (error) {
-    console.error('❌ 清空收藏夹失败:', error);
-    throw error;
-  }
-}
-
-// 统计所有书签数量
-async function countAllBookmarks() {
-  try {
-    const tree = await chrome.bookmarks.getTree();
-    let count = 0;
-
-    function countBookmarks(node) {
-      if (node.url) {
-        count++;
-      }
-      if (node.children) {
-        node.children.forEach(countBookmarks);
-      }
-    }
-
-    tree.forEach(countBookmarks);
-    return count;
-  } catch (error) {
-    console.error('❌ 统计书签数量失败:', error);
-    return 0;
-  }
-}
-
-// 基于路径创建文件夹结构（支持完整嵌套结构）
-async function createFolderStructureBasedOnPaths(folderTree, folderPathMap, bookmarkBarId, otherBookmarksId) {
-  // 递归处理所有文件夹，确保嵌套结构完整创建
-  for (const folder of folderTree) {
-    try {
-      // 确定目标根文件夹
-      let targetRootId = otherBookmarksId; // 默认放到其他书签
-      const folderPath = folder.path || folder.title;
-
-      // 特殊处理一些常见根文件夹
-      if (folderPath.includes('书签栏') || folderPath.includes('收藏夹栏')) {
-        targetRootId = bookmarkBarId;
-      }
-
-      console.log(`🔍 DEBUG: 处理文件夹 "${folder.title}"，路径: "${folderPath}"，根目标: ${targetRootId}`);
-
-      // 创建当前文件夹及其所有子文件夹
-      await createFolderAndChildren(folder, targetRootId, folderPathMap);
-
-    } catch (error) {
-      console.error(`❌ 创建文件夹失败: ${folder.title}`, error);
-    }
-  }
-}
-
-// 递归创建文件夹及其子文件夹
-async function createFolderAndChildren(folder, parentId, folderPathMap) {
-  console.log(`🔍 DEBUG: 创建文件夹 "${folder.title}" 在父文件夹 ${parentId} 下`);
-
-  // 创建当前文件夹
-  const newFolder = await createFolderWithPath(folder, parentId, folderPathMap);
-
-  if (folder.children && folder.children.length > 0) {
-    console.log(`🔍 DEBUG: 开始处理 ${folder.title} 的 ${folder.children.length} 个子文件夹`);
-
-    // 递归创建子文件夹
-    for (const childFolder of folder.children) {
-      await createFolderAndChildren(childFolder, newFolder.id, folderPathMap);
-    }
-  }
-}
-
-// 基于路径创建单个文件夹（修复版本）
-async function createFolderWithPath(folder, parentId, folderPathMap) {
-  const fullPath = folder.path;
-  if (!fullPath) {
-    console.log('⚠️ DEBUG: 文件夹没有路径信息，跳过:', folder);
-    return { id: parentId };
-  }
-
-  const pathParts = fullPath.split('/').filter(part => part.trim());
-  let currentParentId = parentId;
-
-  console.log(`🔍 DEBUG: 开始创建文件夹路径: "${fullPath}", 父级ID: ${parentId}`);
-  console.log(`🔍 DEBUG: 路径分割结果:`, pathParts);
-
-  // 处理路径的第一个部分（根文件夹ID）
-  if (pathParts.length > 0) {
-    const rootId = pathParts[0];
-    let actualRootId;
-
-    // 将数字ID映射到实际的根文件夹ID
-    if (rootId === '1') {
-      actualRootId = '1'; // 书签栏
-      console.log(`🔍 DEBUG: 路径以 "1" 开头，映射到书签栏 (ID: 1)`);
-    } else if (rootId === '2') {
-      actualRootId = '2'; // 其他书签
-      console.log(`🔍 DEBUG: 路径以 "2" 开头，映射到其他书签 (ID: 2)`);
-    } else {
-      console.warn(`⚠️ DEBUG: 未知的根文件夹ID: ${rootId}，默认使用其他书签`);
-      actualRootId = '2';
-    }
-
-    currentParentId = actualRootId;
-
-    // 如果只有一个路径部分（就是根文件夹），直接返回
-    if (pathParts.length === 1) {
-      console.log(`🔍 DEBUG: 路径只有根文件夹，返回ID: ${currentParentId}`);
-      return { id: currentParentId };
-    }
-
-    // 从第二个部分开始处理子文件夹
-    const subPathParts = pathParts.slice(1);
-
-    // 创建子文件夹路径
-    for (let i = 0; i < subPathParts.length; i++) {
-      const pathPart = subPathParts[i];
-      const currentPath = [rootId, ...subPathParts.slice(0, i + 1)].join('/');
-
-      console.log(`🔍 DEBUG: 处理子路径部分 ${i+1}/${subPathParts.length}: "${pathPart}" -> 当前完整路径: "${currentPath}"`);
-
-      // 检查是否已经创建了这个路径的文件夹
-      if (folderPathMap.has(currentPath)) {
-        currentParentId = folderPathMap.get(currentPath);
-        console.log(`  ✅ 路径 "${currentPath}" 已在映射表中，使用ID: ${currentParentId}`);
-        continue;
-      }
-
-      // 获取当前文件夹的标题
-      let folderTitle = pathPart;
-      if (i === subPathParts.length - 1) {
-        // 最后一个部分使用原始文件夹标题
-        folderTitle = folder.title || pathPart;
-        console.log(`🔍 DEBUG: 最后一个路径部分，使用标题: "${folderTitle}"`);
-      }
-
-      console.log(`🔍 DEBUG: 检查父文件夹 ${currentParentId} 下是否存在同名文件夹 "${folderTitle}"`);
-
-      // 检查当前父文件夹下是否已存在同名文件夹
-      const existingFolder = await findFolderByName(currentParentId, folderTitle);
-      if (existingFolder) {
-        folderPathMap.set(currentPath, existingFolder.id);
-        currentParentId = existingFolder.id;
-        console.log(`  ✅ 找到已存在的同名文件夹 "${folderTitle}"，ID: ${existingFolder.id}`);
-        continue;
-      }
-
-      console.log(`🔍 DEBUG: 创建新文件夹 "${folderTitle}" 在父文件夹 ${currentParentId} 下`);
-
-      // 创建新文件夹
-      const newFolder = await chrome.bookmarks.create({
-        parentId: currentParentId,
-        title: folderTitle
-      });
-
-      folderPathMap.set(currentPath, newFolder.id);
-      currentParentId = newFolder.id;
-      console.log(`  ✅ 成功创建新文件夹 "${folderTitle}"，ID: ${newFolder.id}`);
-    }
-  }
-
-  console.log(`🔍 DEBUG: 文件夹路径 "${fullPath}" 处理完成，最终ID: ${currentParentId}`);
-  return { id: currentParentId };
-}
-
-// 根据名称查找文件夹
-async function findFolderByName(parentId, folderName) {
-  try {
-    const children = await chrome.bookmarks.getChildren(parentId);
-    return children.find(child =>
-      !child.url && child.title === folderName
-    );
-  } catch (error) {
-    console.error('❌ 查找文件夹失败:', error);
-    return null;
-  }
-}
-
-// 根据URL和文件夹查找书签（去重检查）
-async function findBookmarkByUrlAndFolder(folderId, url) {
-  try {
-    const children = await chrome.bookmarks.getChildren(folderId);
-    return children.find(child =>
-      child.url === url
-    );
-  } catch (error) {
-    console.error('❌ 查找书签失败:', error);
-    return null;
-  }
-}
-
-// 递归创建文件夹结构
-async function createFolderWithImport(folder, parentId, folderIdMap) {
-  try {
-    // 如果没有父文件夹映射，直接使用提供的parentId
-    let actualParentId = parentId;
-
-    // 如果有parentFolderId且存在映射，使用映射的ID
-    if (folder.parentFolderId && folderIdMap.has(folder.parentFolderId)) {
-      actualParentId = folderIdMap.get(folder.parentFolderId);
-    }
-
-    const newFolder = await chrome.bookmarks.create({
-      parentId: actualParentId,
-      title: folder.title || '未命名文件夹'
-    });
-
-    // 递归创建子文件夹
-    if (folder.children && folder.children.length > 0) {
-      for (const childFolder of folder.children) {
-        try {
-          await createFolderWithImport(childFolder, newFolder.id, folderIdMap);
-        } catch (error) {
-          console.error(`❌ 创建子文件夹失败: ${childFolder.title}`, error);
-          // 不抛出错误，继续创建其他子文件夹
-        }
-      }
-    }
-
-    return newFolder;
-
-  } catch (error) {
-    console.error(`❌ createFolderWithImport 失败:`, error);
-    throw error;
-  }
-}
-
-// 创建书签
-async function createBookmarkWithImport(bookmark, folderIdMap) {
-  try {
-    // 确定目标文件夹ID
-    let targetFolderId = '2'; // 默认放在"其他书签"
-
-    if (bookmark.folderId && folderIdMap.has(bookmark.folderId)) {
-      targetFolderId = folderIdMap.get(bookmark.folderId);
-    } else if (bookmark.parentId && folderIdMap.has(bookmark.parentId)) {
-      targetFolderId = folderIdMap.get(bookmark.parentId);
-    }
-
-    const newBookmark = await chrome.bookmarks.create({
-      parentId: targetFolderId,
-      title: bookmark.title || '未命名书签',
-      url: bookmark.url
-    });
-
-    return newBookmark;
-
-  } catch (error) {
-    console.error(`❌ createBookmarkWithImport 失败:`, error);
-    throw error;
   }
 }
 
